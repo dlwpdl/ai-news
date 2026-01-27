@@ -47,9 +47,27 @@ const RSS_FEEDS: RSSFeed[] = [
 
 const FETCH_TIMEOUT = 10000; // 10초
 
+// AI 관련 키워드
+const AI_KEYWORDS = [
+  'ai', 'artificial intelligence', 'machine learning', 'ml', 'deep learning',
+  'neural network', 'llm', 'large language model', 'gpt', 'chatgpt', 'claude',
+  'gemini', 'generative ai', 'generative', 'agi', 'openai', 'anthropic',
+  'transformer', 'diffusion', 'stable diffusion', 'midjourney', 'dall-e',
+  'computer vision', 'nlp', 'natural language', 'reinforcement learning',
+  'ai model', 'foundation model', 'multimodal', 'deepmind', 'meta ai'
+];
+
+/**
+ * 텍스트가 AI 관련 키워드를 포함하는지 확인
+ */
+function containsAIKeywords(text: string): boolean {
+  const lowerText = text.toLowerCase();
+  return AI_KEYWORDS.some(keyword => lowerText.includes(keyword));
+}
+
 /**
  * 모든 RSS 피드에서 뉴스 수집
- * @returns 날짜 필터링된 모든 뉴스 항목 배열
+ * @returns AI 관련 키워드로 필터링된 뉴스 항목 배열
  */
 export async function fetchAllNews(): Promise<NewsItem[]> {
   console.log(`📡 ${RSS_FEEDS.length}개의 RSS 피드에서 뉴스 수집 시작...`);
@@ -76,8 +94,15 @@ export async function fetchAllNews(): Promise<NewsItem[]> {
   const uniqueNews = removeDuplicates(allNews);
   console.log(`🔍 중복 제거 후: ${uniqueNews.length}개`);
 
+  // AI 키워드 필터링
+  const aiNews = uniqueNews.filter(item => {
+    const textToCheck = `${item.title} ${item.contentSnippet || ''}`;
+    return containsAIKeywords(textToCheck);
+  });
+  console.log(`🤖 AI 키워드 필터링 후: ${aiNews.length}개`);
+
   // 날짜 필터링 (어제 00:00 ~ 현재)
-  const filteredNews = uniqueNews.filter(item =>
+  const filteredNews = aiNews.filter(item =>
     isWithinYesterdayToToday(item.pubDate)
   );
   console.log(`📅 날짜 필터링 후: ${filteredNews.length}개`);
