@@ -46,12 +46,10 @@ const RSS_FEEDS: RSSFeed[] = [
 ];
 
 const FETCH_TIMEOUT = 10000; // 10초
-const MIN_NEWS_COUNT = 10;
-const MAX_NEWS_COUNT = 20;
 
 /**
  * 모든 RSS 피드에서 뉴스 수집
- * @returns 필터링된 뉴스 항목 배열 (최소 10개, 최대 20개)
+ * @returns 날짜 필터링된 모든 뉴스 항목 배열
  */
 export async function fetchAllNews(): Promise<NewsItem[]> {
   console.log(`📡 ${RSS_FEEDS.length}개의 RSS 피드에서 뉴스 수집 시작...`);
@@ -87,18 +85,9 @@ export async function fetchAllNews(): Promise<NewsItem[]> {
   // 발행일 기준 정렬 (최신순)
   filteredNews.sort((a, b) => b.pubDate.getTime() - a.pubDate.getTime());
 
-  // 최소 개수 확인 및 결과 반환
-  if (filteredNews.length < MIN_NEWS_COUNT) {
-    console.warn(
-      `⚠️  필터링된 뉴스가 ${MIN_NEWS_COUNT}개 미만입니다 (${filteredNews.length}개)`
-    );
-  }
+  console.log(`✨ 최종 반환: ${filteredNews.length}개`);
 
-  // 최대 개수로 제한
-  const finalNews = filteredNews.slice(0, MAX_NEWS_COUNT);
-  console.log(`✨ 최종 반환: ${finalNews.length}개`);
-
-  return finalNews;
+  return filteredNews;
 }
 
 /**
