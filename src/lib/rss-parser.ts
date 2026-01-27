@@ -4,44 +4,64 @@ import { isWithinYesterdayToToday } from './date-utils';
 
 const RSS_FEEDS: RSSFeed[] = [
   {
-    url: 'https://techcrunch.com/category/artificial-intelligence/feed/',
-    name: 'TechCrunch AI',
+    url: 'https://bair.berkeley.edu/blog/feed.xml',
+    name: 'Berkeley BAIR',
   },
   {
-    url: 'https://www.theverge.com/ai-artificial-intelligence/rss/index.xml',
-    name: 'The Verge AI',
+    url: 'https://becominghuman.ai/feed',
+    name: 'Becoming Human AI',
   },
   {
-    url: 'https://www.technologyreview.com/topic/artificial-intelligence/feed/',
-    name: 'MIT Tech Review AI',
+    url: 'http://news.mit.edu/rss/topic/artificial-intelligence2',
+    name: 'MIT AI News',
   },
   {
-    url: 'https://venturebeat.com/category/ai/feed/',
-    name: 'VentureBeat AI',
+    url: 'https://blogs.nvidia.com/feed/',
+    name: 'NVIDIA AI Blog',
   },
   {
-    url: 'https://www.wired.com/feed/tag/ai/latest/rss',
-    name: 'Wired AI',
+    url: 'https://davidstutz.de/feed/',
+    name: 'David Stutz Blog',
   },
   {
-    url: 'https://feeds.arstechnica.com/arstechnica/technology-lab',
-    name: 'Ars Technica Tech Lab',
+    url: 'https://www.reddit.com/r/artificial/.rss',
+    name: 'Reddit r/artificial',
   },
   {
-    url: 'https://www.zdnet.com/topic/artificial-intelligence/rss.xml',
-    name: 'ZDNet AI',
+    url: 'https://www.reddit.com/r/neuralnetworks/.rss',
+    name: 'Reddit r/neuralnetworks',
   },
   {
-    url: 'https://www.artificialintelligence-news.com/feed/',
-    name: 'AI News',
+    url: 'https://www.sciencedaily.com/rss/computers_math/artificial_intelligence.xml',
+    name: 'Science Daily AI',
   },
   {
-    url: 'https://analyticsindiamag.com/feed/',
-    name: 'Analytics India Magazine',
+    url: 'https://danieltakeshi.github.io/feed.xml',
+    name: 'Daniel Takeshi Blog',
   },
   {
-    url: 'https://machinelearningmastery.com/feed/',
-    name: 'ML Mastery',
+    url: 'https://vitalab.github.io/feed.xml',
+    name: 'VITAlab',
+  },
+  {
+    url: 'https://medium.com/feed/@karpathy',
+    name: 'Andrej Karpathy',
+  },
+  {
+    url: 'https://openai.com/blog/rss.xml',
+    name: 'OpenAI Blog',
+  },
+  {
+    url: 'https://www.microsoft.com/en-us/research/feed/',
+    name: 'Microsoft Research',
+  },
+  {
+    url: 'https://ai.googleblog.com/feeds/posts/default',
+    name: 'Google AI Blog',
+  },
+  {
+    url: 'http://nlp.fast.ai/feed.xml',
+    name: 'Fast AI',
   },
 ];
 
