@@ -11,13 +11,16 @@ const RSS_FEEDS: RSSFeed[] = [
   { url: 'https://ai.meta.com/blog/rss/', name: 'Meta AI' },
   { url: 'https://blogs.nvidia.com/feed/', name: 'NVIDIA' },
 
-  // === AI 뉴스 & 미디어 ===
-  { url: 'http://news.mit.edu/rss/topic/artificial-intelligence2', name: 'MIT News' },
-  { url: 'https://www.sciencedaily.com/rss/computers_math/artificial_intelligence.xml', name: 'Science Daily' },
-  { url: 'https://huggingface.co/blog/feed.xml', name: 'Hugging Face' },
+  // === AI 뉴스 미디어 ===
+  { url: 'https://techcrunch.com/category/artificial-intelligence/feed/', name: 'TechCrunch' },
+  { url: 'https://venturebeat.com/category/ai/feed/', name: 'VentureBeat' },
+  { url: 'https://www.theverge.com/rss/ai-artificial-intelligence/index.xml', name: 'The Verge' },
+  { url: 'https://arstechnica.com/tag/artificial-intelligence/feed/', name: 'Ars Technica' },
+  { url: 'https://www.technologyreview.com/feed/', name: 'MIT Tech Review' },
 
-  // === 커뮤니티 ===
-  { url: 'https://www.reddit.com/r/artificial/.rss', name: 'Reddit' },
+  // === 연구 & 오픈소스 ===
+  { url: 'http://news.mit.edu/rss/topic/artificial-intelligence2', name: 'MIT News' },
+  { url: 'https://huggingface.co/blog/feed.xml', name: 'Hugging Face' },
 ];
 
 const FETCH_TIMEOUT = 10000; // 10초
