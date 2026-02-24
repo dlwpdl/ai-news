@@ -3,66 +3,21 @@ import type { NewsItem, RSSFeed } from '@/types/news';
 import { isWithinYesterdayToToday } from './date-utils';
 
 const RSS_FEEDS: RSSFeed[] = [
-  {
-    url: 'https://bair.berkeley.edu/blog/feed.xml',
-    name: 'Berkeley BAIR',
-  },
-  {
-    url: 'https://becominghuman.ai/feed',
-    name: 'Becoming Human AI',
-  },
-  {
-    url: 'http://news.mit.edu/rss/topic/artificial-intelligence2',
-    name: 'MIT AI News',
-  },
-  {
-    url: 'https://blogs.nvidia.com/feed/',
-    name: 'NVIDIA AI Blog',
-  },
-  {
-    url: 'https://davidstutz.de/feed/',
-    name: 'David Stutz Blog',
-  },
-  {
-    url: 'https://www.reddit.com/r/artificial/.rss',
-    name: 'Reddit r/artificial',
-  },
-  {
-    url: 'https://www.reddit.com/r/neuralnetworks/.rss',
-    name: 'Reddit r/neuralnetworks',
-  },
-  {
-    url: 'https://www.sciencedaily.com/rss/computers_math/artificial_intelligence.xml',
-    name: 'Science Daily AI',
-  },
-  {
-    url: 'https://danieltakeshi.github.io/feed.xml',
-    name: 'Daniel Takeshi Blog',
-  },
-  {
-    url: 'https://vitalab.github.io/feed.xml',
-    name: 'VITAlab',
-  },
-  {
-    url: 'https://medium.com/feed/@karpathy',
-    name: 'Andrej Karpathy',
-  },
-  {
-    url: 'https://openai.com/blog/rss.xml',
-    name: 'OpenAI Blog',
-  },
-  {
-    url: 'https://www.microsoft.com/en-us/research/feed/',
-    name: 'Microsoft Research',
-  },
-  {
-    url: 'https://ai.googleblog.com/feeds/posts/default',
-    name: 'Google AI Blog',
-  },
-  {
-    url: 'http://nlp.fast.ai/feed.xml',
-    name: 'Fast AI',
-  },
+  // === 주요 AI 기업 블로그 ===
+  { url: 'https://openai.com/blog/rss.xml', name: 'OpenAI' },
+  { url: 'https://www.anthropic.com/feed.xml', name: 'Anthropic' },
+  { url: 'https://blog.google/technology/ai/rss/', name: 'Google AI' },
+  { url: 'https://www.microsoft.com/en-us/research/feed/', name: 'Microsoft Research' },
+  { url: 'https://ai.meta.com/blog/rss/', name: 'Meta AI' },
+  { url: 'https://blogs.nvidia.com/feed/', name: 'NVIDIA' },
+
+  // === AI 뉴스 & 미디어 ===
+  { url: 'http://news.mit.edu/rss/topic/artificial-intelligence2', name: 'MIT News' },
+  { url: 'https://www.sciencedaily.com/rss/computers_math/artificial_intelligence.xml', name: 'Science Daily' },
+  { url: 'https://huggingface.co/blog/feed.xml', name: 'Hugging Face' },
+
+  // === 커뮤니티 ===
+  { url: 'https://www.reddit.com/r/artificial/.rss', name: 'Reddit' },
 ];
 
 const FETCH_TIMEOUT = 10000; // 10초
@@ -112,10 +67,14 @@ export async function fetchAllNews(): Promise<NewsItem[]> {
 
   // 중복 제거 (URL 기준)
   const uniqueNews = removeDuplicates(allNews);
-  console.log(`🔍 중복 제거 후: ${uniqueNews.length}개`);
+  console.log(`🔍 URL 중복 제거 후: ${uniqueNews.length}개`);
+
+  // 제목 유사도 기반 중복 제거 (다른 소스의 동일 기사)
+  const dedupedNews = removeSimilarTitles(uniqueNews);
+  console.log(`🔍 제목 중복 제거 후: ${dedupedNews.length}개`);
 
   // AI 키워드 필터링
-  const aiNews = uniqueNews.filter(item => {
+  const aiNews = dedupedNews.filter(item => {
     const textToCheck = `${item.title} ${item.contentSnippet || ''}`;
     return containsAIKeywords(textToCheck);
   });
@@ -163,6 +122,81 @@ async function fetchRSSFeed(feed: RSSFeed): Promise<NewsItem[]> {
   } catch (error) {
     throw new Error(`Failed to parse ${feed.name}: ${error}`);
   }
+}
+
+// 제목 비교 시 무시할 일반적인 단어들
+const STOP_WORDS = new Set([
+  'the', 'a', 'an', 'is', 'are', 'was', 'were', 'in', 'on', 'at', 'to',
+  'for', 'of', 'and', 'or', 'but', 'with', 'by', 'from', 'as', 'its',
+  'it', 'this', 'that', 'has', 'have', 'had', 'will', 'be', 'been',
+  'can', 'could', 'would', 'should', 'may', 'might', 'new', 'how', 'what',
+  'why', 'when', 'where', 'who', 'which', 'not', 'no', 'do', 'does',
+]);
+
+/**
+ * 제목을 정규화하여 비교 가능한 단어 집합으로 변환
+ */
+function titleToWords(title: string): Set<string> {
+  const normalized = title
+    .toLowerCase()
+    .replace(/[^\w\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return new Set(
+    normalized.split(' ').filter(w => w.length > 2 && !STOP_WORDS.has(w))
+  );
+}
+
+/**
+ * 두 단어 집합의 Jaccard 유사도 계산 (0~1)
+ */
+function jaccardSimilarity(a: Set<string>, b: Set<string>): number {
+  if (a.size === 0 && b.size === 0) return 0;
+
+  let intersection = 0;
+  for (const word of a) {
+    if (b.has(word)) intersection++;
+  }
+
+  const union = a.size + b.size - intersection;
+  return union === 0 ? 0 : intersection / union;
+}
+
+/**
+ * 제목 유사도 기반으로 중복 기사 제거
+ * 다른 소스에서 같은 뉴스를 보도한 경우를 필터링
+ */
+function removeSimilarTitles(news: NewsItem[]): NewsItem[] {
+  const kept: NewsItem[] = [];
+  const keptWordSets: Set<string>[] = [];
+
+  for (const item of news) {
+    const words = titleToWords(item.title);
+
+    // 단어가 너무 적으면 유사도 비교가 부정확하므로 무조건 포함
+    if (words.size <= 2) {
+      kept.push(item);
+      keptWordSets.push(words);
+      continue;
+    }
+
+    let isDuplicate = false;
+    for (const existingWords of keptWordSets) {
+      if (existingWords.size <= 2) continue;
+      if (jaccardSimilarity(words, existingWords) >= 0.5) {
+        isDuplicate = true;
+        break;
+      }
+    }
+
+    if (!isDuplicate) {
+      kept.push(item);
+      keptWordSets.push(words);
+    }
+  }
+
+  return kept;
 }
 
 /**

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { fetchAllNews } from '@/lib/rss-parser';
 import { sendToTelegram } from '@/lib/telegram';
 import { getKSTNow } from '@/lib/date-utils';
+import { filterNewUrls, markAsSent } from '@/lib/dedup-store';
 
 /**
  * Vercel Cron Job 핸들러
@@ -26,13 +27,25 @@ export async function GET(request: NextRequest) {
     // 1. RSS 피드에서 뉴스 수집
     const newsItems = await fetchAllNews();
 
-    // 2. 텔레그램으로 전송
-    await sendToTelegram(newsItems);
+    // 2. 크로스-런 중복 제거 (Redis)
+    const newUrls = await filterNewUrls(newsItems.map(item => item.link));
+    const uniqueItems = newsItems.filter(item => newUrls.has(item.link));
+    console.log(`🔄 크로스-런 중복 제거: ${newsItems.length}개 → ${uniqueItems.length}개`);
 
-    // 3. 성공 응답
+    // 3. 텔레그램으로 전송
+    await sendToTelegram(uniqueItems);
+
+    // 4. 전송 성공한 URL을 Redis에 저장
+    if (uniqueItems.length > 0) {
+      await markAsSent(uniqueItems.map(item => item.link));
+    }
+
+    // 5. 성공 응답
     const response = {
       success: true,
-      count: newsItems.length,
+      total: newsItems.length,
+      sent: uniqueItems.length,
+      duplicatesSkipped: newsItems.length - uniqueItems.length,
       timestamp: new Date().toISOString(),
     };
 
