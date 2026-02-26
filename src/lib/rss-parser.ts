@@ -5,10 +5,8 @@ import { isWithinYesterdayToToday } from './date-utils';
 const RSS_FEEDS: RSSFeed[] = [
   // === 주요 AI 기업 블로그 ===
   { url: 'https://openai.com/blog/rss.xml', name: 'OpenAI' },
-  { url: 'https://www.anthropic.com/feed.xml', name: 'Anthropic' },
   { url: 'https://blog.google/technology/ai/rss/', name: 'Google AI' },
   { url: 'https://www.microsoft.com/en-us/research/feed/', name: 'Microsoft Research' },
-  { url: 'https://ai.meta.com/blog/rss/', name: 'Meta AI' },
   { url: 'https://blogs.nvidia.com/feed/', name: 'NVIDIA' },
 
   // === AI 뉴스 미디어 ===
