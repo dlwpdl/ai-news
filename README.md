@@ -40,7 +40,7 @@ Sources are intentionally split by trust and usefulness:
 - Research sources: MIT News AI/ML, Berkeley BAIR, Stanford Gradient Science, Distill, arXiv `cs.AI`, `cs.LG`, `cs.CL`, `cs.CV`, `stat.ML`.
 - Developer and platform sources: Hugging Face, NVIDIA Developer, AWS Machine Learning, Weaviate, LangChain Blog, GitHub Blog, Meta Engineering.
 - Practitioner sources: Simon Willison, Latent Space, Lilian Weng, Chip Huyen, GeekNews.
-- Community signals: Lobsters AI.
+- Community signals: GeekNews RSS, Lobsters AI, and optional Threads keyword search.
 - Open-source signals: targeted GitHub searches for `ai-agent`, `rag`, `mcp`, and `llmops`.
 - Runtime/tool release signals: vLLM, Ollama, and Model Context Protocol SDK release feeds.
 
@@ -72,9 +72,11 @@ TELEGRAM_BOT_TOKEN=
 TELEGRAM_CHAT_ID=
 SENT_URLS_FILE=.cache/ai-news-sent.json
 GITHUB_TOKEN=optional_for_local_github_api_rate_limits
+THREADS_ACCESS_TOKEN=optional_for_threads_keyword_search
 ```
 
 GitHub Actions provides `GITHUB_TOKEN` automatically. For local runs, it is optional but useful when testing GitHub repo searches repeatedly.
+Threads search is disabled unless `THREADS_ACCESS_TOKEN` is set. Public Threads keyword search also requires Meta's `threads_keyword_search` permission; without approval it is limited to posts owned by the authenticated user.
 
 ## Run Locally
 

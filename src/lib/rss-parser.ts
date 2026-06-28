@@ -48,6 +48,7 @@ const RSS_FEEDS: RSSFeed[] = [
 const FETCH_TIMEOUT = 10000; // 10초
 const MAX_NEWS_ITEMS = 12;
 const GITHUB_TREND_TOPICS = ['ai-agent', 'rag', 'mcp', 'llmops'];
+const THREADS_QUERIES = ['llm', 'ai agent', 'rag', 'mcp'];
 
 interface AnthropicLink {
   path: string;
@@ -143,6 +144,7 @@ export async function fetchAllNews(): Promise<NewsItem[]> {
     Promise.allSettled([
       fetchAnthropicPages(),
       fetchGitHubTrendingAI(),
+      fetchThreadsSearch(),
     ]),
   ]);
 
@@ -303,6 +305,46 @@ async function fetchGitHubTrendingAI(): Promise<NewsItem[]> {
   return removeDuplicates(repos).slice(0, 2);
 }
 
+interface ThreadsPost {
+  id: string;
+  text?: string;
+  permalink?: string;
+  timestamp?: string;
+  username?: string;
+}
+
+async function fetchThreadsSearch(): Promise<NewsItem[]> {
+  const token = process.env.THREADS_ACCESS_TOKEN;
+  if (!token) return [];
+
+  const results = await Promise.allSettled(
+    THREADS_QUERIES.map(query => fetchThreadsPosts(query, token))
+  );
+
+  return results.flatMap(result => result.status === 'fulfilled' ? result.value : []).slice(0, 6);
+}
+
+async function fetchThreadsPosts(query: string, token: string): Promise<NewsItem[]> {
+  const params = new URLSearchParams({
+    q: query,
+    search_type: 'RECENT',
+    search_mode: 'KEYWORD',
+    fields: 'id,text,permalink,timestamp,username',
+    access_token: token,
+  });
+  const json = await fetchJSON<{ data?: ThreadsPost[] }>(`https://graph.threads.net/v1.0/keyword_search?${params}`, 'NewsBot/1.0');
+
+  return (json.data || [])
+    .filter(post => post.text && post.permalink && post.timestamp)
+    .map(post => ({
+      title: truncateText(post.text!, 90),
+      link: post.permalink!,
+      pubDate: new Date(post.timestamp!),
+      contentSnippet: post.username ? `@${post.username}: ${post.text}` : post.text,
+      source: `Threads:${query}`,
+    }));
+}
+
 interface GitHubRepo {
   full_name: string;
   html_url: string;
@@ -375,6 +417,11 @@ function decodeHTML(text: string): string {
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>');
+}
+
+function truncateText(text: string, maxLength: number): string {
+  const clean = text.replace(/\s+/g, ' ').trim();
+  return clean.length <= maxLength ? clean : `${clean.slice(0, maxLength - 1)}…`;
 }
 
 // 제목 비교 시 무시할 일반적인 단어들
