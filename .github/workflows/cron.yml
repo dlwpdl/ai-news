@@ -4,6 +4,8 @@ on:
   schedule:
     # KST 08:00 = UTC 23:00 (전날)
     - cron: '0 23 * * *'
+    # KST 20:00 = UTC 11:00
+    - cron: '0 11 * * *'
   workflow_dispatch:
     inputs:
       limit:

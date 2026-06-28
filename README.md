@@ -93,12 +93,13 @@ NEWS_LIMIT=0 npm run send
 
 ## Schedule
 
-GitHub Actions runs once daily at 08:00 KST:
+GitHub Actions runs twice daily at 08:00 and 20:00 KST:
 
 ```text
 0 23 * * *  # UTC, previous day
+0 11 * * *  # UTC
 ```
 
 Manual workflow runs support an optional `limit` input for message format tests.
 
-Sent URL deduplication is stored in the GitHub Actions cache for 72 hours, so the same item is not repeatedly sent across daily runs.
+Sent URL deduplication is stored in the GitHub Actions cache for 72 hours, so the same item is not repeatedly sent across scheduled runs.
