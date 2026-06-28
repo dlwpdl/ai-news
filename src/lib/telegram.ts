@@ -90,7 +90,7 @@ function getAIProfile(item: NewsItem) {
   const category = getAICategory(text);
   const summary = getSummary(item);
   const shortTitle = truncate(stripHTML(item.title), 58);
-  const insight = `${getAIInsight(category, level)} ${getAIExperiment(category)}`;
+  const insight = getAIInsight(item, text, category, level);
 
   return { level, shortTitle, category, summary, insight };
 }
@@ -119,29 +119,63 @@ function getAICategory(text: string): string {
   return 'AI 기술뉴스';
 }
 
-function getAIInsight(category: string, level: string): string {
-  if (level === 'L10') return '논문/연구 후보. 아이디어보다 데이터셋, 평가지표, 베이스라인, 재현 코드가 있는지 먼저 보면 실제 적용 가능성을 빠르게 가를 수 있음.';
-  if (category === 'AI 에이전트') return '에이전트 자동화에 붙일 수 있는지 확인할 가치가 있음. 성공 사례보다 실패 조건, 권한 범위, 도구 호출 로그를 먼저 봐야 함.';
-  if (category === 'RAG/검색') return '검색 품질, 근거 표시, hallucination 감소에 바로 연결될 수 있음. 기존 RAG 파이프라인의 rerank/query rewrite 단계와 비교하면 됨.';
-  if (category === '평가/벤치마크') return '모델이나 프롬프트 선택 기준으로 재사용 가능함. 점수 자체보다 태스크 구성과 채점 기준이 내 워크플로우에 맞는지가 핵심.';
-  if (category === '추론/배포') return '비용, 지연시간, 로컬 실행 가능성을 확인할 만함. 같은 입력으로 hosted API 대비 latency/cost/failure rate를 비교하면 바로 판단 가능.';
-  if (category === '개발도구/API') return '샌드박스에 최소 호출만 붙여 생산성 개선 여부를 확인하면 됨. SDK 품질, rate limit, 예외 처리 방식이 실제 도입 여부를 좌우함.';
-  return '실험 링크나 코드가 있으면 PoC 후보, 없으면 읽기만 하고 넘겨도 됨. 당장 쓸 수 있는 API, repo, benchmark가 있는지 먼저 확인.';
+function getAIInsight(item: NewsItem, text: string, category: string, level: string): string {
+  const topic = getTopicHint(item.title);
+  const parts = [
+    topic && `핵심 키워드: ${topic}.`,
+    getAISourceAngle(item.source, level),
+    getAISignalAngle(text, category),
+    getAIExperiment(text, category, item.source),
+  ].filter(Boolean);
+
+  return parts.join(' ');
 }
 
-function getAIExperiment(category: string): string {
-  if (category === '논문/연구') return '실험: 초록과 방법만 읽고 dataset, metric, baseline 3개를 적기.';
-  if (category === 'AI 에이전트') return '실험: 읽기 전용 도구 1개로 성공/실패 케이스 5개를 돌리기.';
-  if (category === 'RAG/검색') return '실험: 질문 10개로 기존 검색과 정답률/근거 품질을 비교하기.';
-  if (category === '평가/벤치마크') return '실험: 대표 프롬프트 10개를 같은 채점 기준으로 재실행하기.';
-  if (category === '추론/배포') return '실험: 같은 입력 20개로 latency, cost, 실패율을 측정하기.';
-  if (category === '개발도구/API') return '실험: hello-world 호출 후 샘플 10개 결과를 표로 남기기.';
-  return '실험: 15분 안에 API/코드/논문 링크가 있는지 확인하기.';
+function getAISourceAngle(source: string, level: string): string {
+  if (/github/i.test(source)) return 'repo라서 README, examples, 최근 커밋만 보면 바로 써볼 수 있는지 판단 가능.';
+  if (level === 'L10' || /arxiv|research|bair|gradient|distill|mit news/i.test(source)) return '연구성 글이라 dataset, metric, baseline, 코드 공개 여부가 핵심.';
+  if (/openai|anthropic|google|deepmind|mistral/i.test(source)) return '공식 발표라 API 제약, 가격, rate limit, 마이그레이션 비용을 같이 확인해야 함.';
+  if (/developer|aws|nvidia|weaviate|hugging face/i.test(source)) return '개발자 문서/플랫폼 글이라 샘플 코드와 운영 제약을 바로 대조해볼 만함.';
+  return '링크 안에 코드, API, benchmark 중 하나가 있으면 PoC 후보로 볼 만함.';
+}
+
+function getAISignalAngle(text: string, category: string): string {
+  if (/agent|tool use|mcp|function calling|에이전트/.test(text)) return '도구 호출 로그, 권한 경계, 실패 복구 방식이 실제 자동화 도입 포인트.';
+  if (/rag|retrieval|embedding|vector|임베딩|벡터/.test(text)) return '기존 검색셋에 붙여 정답률보다 근거 품질과 재현성을 먼저 비교하면 됨.';
+  if (/eval|benchmark|evaluation|벤치마크|평가/.test(text)) return '점수보다 태스크 구성과 채점 기준이 내 프롬프트/모델 선택에 맞는지가 중요.';
+  if (/inference|serving|deploy|quantization|cuda|vllm|onnx|추론|배포/.test(text)) return '같은 입력으로 latency, cost, 실패율을 재면 도입 여부가 빨리 갈림.';
+  if (/multimodal|vision|speech|image|video|멀티모달|비전|음성/.test(text)) return '입출력 포맷과 품질 평가 샘플을 먼저 고정해야 비교가 쉬움.';
+  if (category === '개발도구/API') return 'SDK 예외 처리와 최소 호출 코드가 깔끔한지 보면 실제 붙일 때 비용이 보임.';
+  return '제목만 보고 넘기지 말고 원문에서 API, repo, paper, benchmark 링크 유무만 빠르게 확인.';
+}
+
+function getAIExperiment(text: string, category: string, source: string): string {
+  if (/github/i.test(source)) return '실험: 설치 없이 README와 example만 보고 15분 PoC 가능한지 체크.';
+  if (/paper|arxiv|논문/.test(text)) return '실험: abstract, method, limitation만 읽고 내 태스크에 맞는 metric 1개 적기.';
+  if (category === 'AI 에이전트') return '실험: 읽기 전용 도구 1개로 성공/실패 케이스 3개만 돌리기.';
+  if (category === 'RAG/검색') return '실험: 기존 질문 5개로 답변 근거가 더 좋아지는지만 비교.';
+  if (category === '추론/배포') return '실험: 같은 입력 10개로 응답시간과 실패 케이스만 기록.';
+  return '실험: 원문에서 바로 실행 가능한 코드나 API가 없으면 저장만 하고 넘기기.';
 }
 
 function getSummary(item: NewsItem): string {
   const raw = stripHTML(item.contentSnippet || item.title).replace(/\s+/g, ' ').trim();
   return truncate(raw || stripHTML(item.title), 240);
+}
+
+const TOPIC_STOP_WORDS = new Set([
+  'the', 'and', 'for', 'with', 'from', 'into', 'that', 'this', 'new', 'how',
+  'what', 'why', 'using', 'towards', 'toward', 'about', 'news', 'blog',
+  'introducing', 'launching', 'building', 'getting', 'started',
+]);
+
+function getTopicHint(title: string): string {
+  const words = stripHTML(title)
+    .split(/[^A-Za-z0-9가-힣._+-]+/)
+    .map(word => word.trim())
+    .filter(word => word.length > 2 && !TOPIC_STOP_WORDS.has(word.toLowerCase()));
+
+  return words.slice(0, 3).join(', ');
 }
 
 function stripHTML(text: string): string {
