@@ -126,7 +126,7 @@ export async function fetchAllNews(): Promise<NewsItem[]> {
   // 모든 RSS 피드를 병렬로 파싱
   const [rssResults, extraResults] = await Promise.all([
     Promise.allSettled(
-    RSS_FEEDS.map(feed => fetchRSSFeed(feed))
+      RSS_FEEDS.map(feed => fetchRSSFeed(feed))
     ),
     Promise.allSettled([
       fetchAnthropicPages(),
