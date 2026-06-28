@@ -4,10 +4,6 @@ on:
   schedule:
     # KST 08:00 = UTC 23:00 (전날)
     - cron: '0 23 * * *'
-    # KST 13:00 = UTC 04:00
-    - cron: '0 4 * * *'
-    # KST 19:00 = UTC 10:00
-    - cron: '0 10 * * *'
   workflow_dispatch: # 수동 실행 허용
 
 jobs:

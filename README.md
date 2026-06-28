@@ -65,4 +65,4 @@ curl 'http://localhost:3000/api/cron?limit=1' \
 
 ## Cron
 
-`vercel.json` runs at 08:00, 13:00, and 19:00 KST.
+`vercel.json` and GitHub Actions run once daily at 08:00 KST.
