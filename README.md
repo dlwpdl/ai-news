@@ -11,7 +11,6 @@ Each item is formatted for quick triage:
 ```text
 1. [L8][AI 에이전트][Short title]
 내용: What changed and enough context to understand it
-인사이트: Why it matters, what to verify, and a small experiment idea
 출처: Source · 원문 직접
 ```
 
