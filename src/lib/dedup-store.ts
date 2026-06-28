@@ -1,97 +1,59 @@
-import { Redis } from '@upstash/redis';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
 
-let redis: Redis | null = null;
+const DEDUP_TTL_MS = 72 * 60 * 60 * 1000;
+const SENT_URLS_FILE = process.env.SENT_URLS_FILE || '.cache/ai-news-sent.json';
 
-const DEDUP_TTL = 48 * 60 * 60; // 48시간
-const KEY_PREFIX = 'ai-news:sent:';
+type SentUrls = Record<string, number>;
 
-/**
- * Redis 클라이언트 싱글톤
- */
-function getRedisClient(): Redis | null {
-  if (redis) return redis;
+export async function filterNewUrls(urls: string[]): Promise<Set<string>> {
+  if (urls.length === 0) return new Set();
 
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  const sent = prune(await readSentUrls());
+  const fresh = urls.filter(url => !sent[normalizeURL(url)]);
+  console.log(`🔄 중복 체크: ${urls.length}개 중 ${fresh.length}개 신규`);
+  return new Set(fresh);
+}
 
-  if (!url || !token) {
-    console.log('⚠️ Redis 미설정 - 중복 체크 비활성화');
-    return null;
+export async function markAsSent(urls: string[]): Promise<void> {
+  if (urls.length === 0) return;
+
+  const sent = prune(await readSentUrls());
+  const now = Date.now();
+
+  for (const url of urls) {
+    sent[normalizeURL(url)] = now;
   }
 
+  await mkdir(dirname(SENT_URLS_FILE), { recursive: true });
+  await writeFile(SENT_URLS_FILE, JSON.stringify(sent), 'utf8');
+  console.log(`✅ ${urls.length}개 URL을 중복 캐시에 저장`);
+}
+
+async function readSentUrls(): Promise<SentUrls> {
   try {
-    redis = new Redis({ url, token });
-    return redis;
+    return JSON.parse(await readFile(SENT_URLS_FILE, 'utf8')) as SentUrls;
   } catch (error) {
-    console.error('❌ Redis 초기화 실패:', error);
-    return null;
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+      return {};
+    }
+    console.error('❌ 중복 캐시 읽기 실패 (전체 신규 처리):', error);
+    return {};
   }
 }
 
-/**
- * URL 정규화
- */
+function prune(sent: SentUrls): SentUrls {
+  const minTime = Date.now() - DEDUP_TTL_MS;
+  return Object.fromEntries(
+    Object.entries(sent).filter(([, time]) => time >= minTime)
+  );
+}
+
 function normalizeURL(url: string): string {
   try {
     const parsed = new URL(url);
     return (parsed.origin + parsed.pathname).toLowerCase();
   } catch {
     return url.toLowerCase();
-  }
-}
-
-/**
- * 이미 전송된 URL인지 확인하고, 새로운 URL만 필터링하여 반환
- */
-export async function filterNewUrls(urls: string[]): Promise<Set<string>> {
-  const client = getRedisClient();
-  const newUrls = new Set<string>(urls);
-
-  if (!client || urls.length === 0) return newUrls;
-
-  try {
-    const pipeline = client.pipeline();
-    const normalized = urls.map(u => KEY_PREFIX + normalizeURL(u));
-
-    for (const key of normalized) {
-      pipeline.exists(key);
-    }
-
-    const results = await pipeline.exec<number[]>();
-
-    const filtered = new Set<string>();
-    urls.forEach((url, i) => {
-      if (results[i] === 0) {
-        filtered.add(url);
-      }
-    });
-
-    console.log(`🔄 중복 체크: ${urls.length}개 중 ${filtered.size}개 신규`);
-    return filtered;
-  } catch (error) {
-    console.error('❌ Redis 중복 체크 실패 (전체 전송으로 fallback):', error);
-    return newUrls;
-  }
-}
-
-/**
- * 전송된 URL들을 Redis에 저장 (48시간 TTL)
- */
-export async function markAsSent(urls: string[]): Promise<void> {
-  const client = getRedisClient();
-  if (!client || urls.length === 0) return;
-
-  try {
-    const pipeline = client.pipeline();
-
-    for (const url of urls) {
-      const key = KEY_PREFIX + normalizeURL(url);
-      pipeline.setex(key, DEDUP_TTL, '1');
-    }
-
-    await pipeline.exec();
-    console.log(`✅ ${urls.length}개 URL을 Redis에 저장 (TTL: 48h)`);
-  } catch (error) {
-    console.error('❌ Redis 저장 실패:', error);
   }
 }

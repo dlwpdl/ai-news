@@ -1,16 +1,15 @@
 # AI News
 
-Practical AI news Telegram bot. It collects AI, LLM, agent, automation, GitHub trend, and research sources, ranks them by usefulness, and sends compact Telegram messages.
+Practical AI news Telegram sender. It collects AI, LLM, agent, automation, GitHub activity, and research sources, then sends the most useful items once daily.
 
-## Message Shape
+## Message Format
 
-- L1-L10 level
-- Short title
-- Category
-- Brief summary
-- Practical insight
-- Small experiment idea
-- Source link
+```text
+1. [L8][AI 에이전트][Short title]
+내용: Brief context
+인사이트: Why it matters and a small experiment idea
+출처: Source · 원문 직접
+```
 
 ## Levels
 
@@ -27,12 +26,12 @@ Practical AI news Telegram bot. It collects AI, LLM, agent, automation, GitHub t
 | L9 | Model or benchmark research |
 | L10 | Paper or frontier research |
 
-## Main Sources
+## Sources
 
 - OpenAI, Google AI, Google DeepMind, Mistral, Microsoft Research
 - MIT News, BAIR, Stanford Gradient Science, Distill, arXiv
 - Hugging Face, NVIDIA Developer, AWS ML, Weaviate, GitHub Blog
-- Anthropic pages and GitHub AI trend search
+- Anthropic pages and GitHub AI repo search
 - GeekNews, Simon Willison, Latent Space, Lilian Weng, Chip Huyen
 
 ## Environment
@@ -40,29 +39,19 @@ Practical AI news Telegram bot. It collects AI, LLM, agent, automation, GitHub t
 ```bash
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_CHAT_ID=
-CRON_SECRET=
-UPSTASH_REDIS_REST_URL=
-UPSTASH_REDIS_REST_TOKEN=
+SENT_URLS_FILE=.cache/ai-news-sent.json
 ```
-
-Upstash Redis is optional but recommended. Without it, cross-run duplicate filtering is disabled.
 
 ## Run
 
 ```bash
-npm install
+npm ci
 npm run lint
-npx tsc --noEmit
-npm run build
-```
-
-Manual one-item test:
-
-```bash
-curl 'http://localhost:3000/api/cron?limit=1' \
-  -H "Authorization: Bearer $CRON_SECRET"
+NEWS_LIMIT=1 npm run send
 ```
 
 ## Cron
 
-`vercel.json` and GitHub Actions run once daily at 08:00 KST.
+GitHub Actions runs once daily at 08:00 KST. Manual workflow runs accept an optional `limit` input for format tests.
+
+Sent URL deduplication is stored in the GitHub Actions cache for 72 hours.

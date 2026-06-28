@@ -4,18 +4,33 @@ on:
   schedule:
     # KST 08:00 = UTC 23:00 (전날)
     - cron: '0 23 * * *'
-  workflow_dispatch: # 수동 실행 허용
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: 'Optional number of items to send'
+        required: false
+        type: number
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
 
 jobs:
   send-news:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
+
+      - uses: actions/cache@v6
+        with:
+          path: .cache/ai-news-sent.json
+          key: ${{ runner.os }}-ai-news-sent-${{ github.run_id }}
+          restore-keys: ${{ runner.os }}-ai-news-sent-
 
       - run: npm ci
 
@@ -23,5 +38,5 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
-          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+          NEWS_LIMIT: ${{ github.event.inputs.limit || '' }}
+          SENT_URLS_FILE: .cache/ai-news-sent.json

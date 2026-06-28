@@ -1,6 +1,6 @@
 import Parser from 'rss-parser';
 import type { NewsItem, RSSFeed } from '@/types/news';
-import { isWithinYesterdayToToday } from './date-utils';
+import { isWithinRecentHours } from './date-utils';
 
 const RSS_FEEDS: RSSFeed[] = [
   // === 공식 AI 연구소/모델 회사 ===
@@ -179,9 +179,9 @@ export async function fetchAllNews(): Promise<NewsItem[]> {
   const focusedNews = aiNews.filter(isFocusedAI);
   console.log(`🧪 실무/연구 필터링 후: ${focusedNews.length}개`);
 
-  // 날짜 필터링 (어제 00:00 ~ 현재)
+  // 날짜 필터링 (하루 1회 실행 + 지연 여유)
   const filteredNews = focusedNews.filter(item =>
-    isWithinYesterdayToToday(item.pubDate)
+    isWithinRecentHours(item.pubDate)
   );
   console.log(`📅 날짜 필터링 후: ${filteredNews.length}개`);
 
