@@ -63,17 +63,12 @@ function formatNewsItem(item: NewsItem, index: number): string {
   const profile = getAIProfile(item);
   const source = escapeHTML(item.source);
   const link = escapeHTML(item.link);
-  const relTime = getRelativeTime(item.pubDate);
 
   return [
-    `<b>${index + 1}. ${escapeHTML(profile.shortTitle)}</b>`,
-    `     레벨: ${profile.level} · ${escapeHTML(getLevelName(profile.level))}`,
-    `     카테고리: ${escapeHTML(profile.category)}`,
-    `     내용: ${escapeHTML(profile.summary)}`,
-    `     인사이트: ${escapeHTML(profile.insight)}`,
-    `     실험: ${escapeHTML(profile.experiment)}`,
-    `     ${source} · ${relTime}`,
-    `     출처: <a href="${link}">${source}</a>`,
+    `<b>${index + 1}. [${profile.level}][${escapeHTML(profile.category)}][${escapeHTML(profile.shortTitle)}]</b>`,
+    `내용: ${escapeHTML(profile.summary)}`,
+    `인사이트: ${escapeHTML(profile.insight)}`,
+    `출처: ${source} · <a href="${link}">원문 직접</a>`,
     '',
   ].join('\n');
 }
@@ -84,10 +79,9 @@ function getAIProfile(item: NewsItem) {
   const category = getAICategory(text);
   const summary = getSummary(item);
   const shortTitle = truncate(stripHTML(item.title), 58);
-  const insight = getAIInsight(category, level);
-  const experiment = getAIExperiment(category);
+  const insight = `${getAIInsight(category, level)} ${getAIExperiment(category)}`;
 
-  return { level, shortTitle, category, summary, insight, experiment };
+  return { level, shortTitle, category, summary, insight };
 }
 
 function getAILevel(text: string): string {
@@ -115,44 +109,28 @@ function getAICategory(text: string): string {
 }
 
 function getAIInsight(category: string, level: string): string {
-  if (level === 'L10') return '연구 후보. 데이터셋/평가지표/베이스라인만 먼저 확인할 가치가 있음';
-  if (category === 'AI 에이전트') return '자동화 워크플로우에 붙일 수 있는지 실패 케이스부터 보면 됨';
-  if (category === 'RAG/검색') return '검색 품질이나 근거 표시 개선에 바로 연결될 수 있음';
-  if (category === '평가/벤치마크') return '모델/프롬프트 선택 기준으로 재사용 가능';
-  if (category === '추론/배포') return '비용, 지연시간, 로컬 실행 가능성을 확인할 만함';
-  if (category === '개발도구/API') return '샌드박스에 최소 호출만 붙여 생산성 개선 여부를 확인하면 됨';
-  return '실험 링크나 코드가 있으면 PoC 후보, 없으면 읽기만 하고 넘겨도 됨';
+  if (level === 'L10') return '논문/연구 후보. 아이디어보다 데이터셋, 평가지표, 베이스라인, 재현 코드가 있는지 먼저 보면 실제 적용 가능성을 빠르게 가를 수 있음.';
+  if (category === 'AI 에이전트') return '에이전트 자동화에 붙일 수 있는지 확인할 가치가 있음. 성공 사례보다 실패 조건, 권한 범위, 도구 호출 로그를 먼저 봐야 함.';
+  if (category === 'RAG/검색') return '검색 품질, 근거 표시, hallucination 감소에 바로 연결될 수 있음. 기존 RAG 파이프라인의 rerank/query rewrite 단계와 비교하면 됨.';
+  if (category === '평가/벤치마크') return '모델이나 프롬프트 선택 기준으로 재사용 가능함. 점수 자체보다 태스크 구성과 채점 기준이 내 워크플로우에 맞는지가 핵심.';
+  if (category === '추론/배포') return '비용, 지연시간, 로컬 실행 가능성을 확인할 만함. 같은 입력으로 hosted API 대비 latency/cost/failure rate를 비교하면 바로 판단 가능.';
+  if (category === '개발도구/API') return '샌드박스에 최소 호출만 붙여 생산성 개선 여부를 확인하면 됨. SDK 품질, rate limit, 예외 처리 방식이 실제 도입 여부를 좌우함.';
+  return '실험 링크나 코드가 있으면 PoC 후보, 없으면 읽기만 하고 넘겨도 됨. 당장 쓸 수 있는 API, repo, benchmark가 있는지 먼저 확인.';
 }
 
 function getAIExperiment(category: string): string {
-  if (category === '논문/연구') return '초록과 방법만 읽고 dataset, metric, baseline 3개 적기';
-  if (category === 'AI 에이전트') return '읽기 전용 도구 1개로 성공/실패 케이스 5개 돌리기';
-  if (category === 'RAG/검색') return '질문 10개로 기존 검색과 정답률/근거 품질 비교';
-  if (category === '평가/벤치마크') return '대표 프롬프트 10개를 같은 채점 기준으로 재실행';
-  if (category === '추론/배포') return '같은 입력 20개로 latency, cost, 실패율 측정';
-  if (category === '개발도구/API') return 'hello-world 호출 후 샘플 10개 결과를 표로 남기기';
-  return '15분 안에 API/코드/논문 링크가 있는지 확인';
-}
-
-function getLevelName(level: string): string {
-  const names: Record<string, string> = {
-    L1: 'AI 일반 소식',
-    L2: '제품/기능 발표',
-    L3: '프롬프트/사용 팁',
-    L4: '튜토리얼/가이드',
-    L5: '워크플로우 자동화',
-    L6: 'API/SDK/오픈소스',
-    L7: '추론/배포/운영',
-    L8: '에이전트/RAG/Eval',
-    L9: '모델/벤치마크 리서치',
-    L10: '논문/최전선 연구',
-  };
-  return names[level] || '분류 보류';
+  if (category === '논문/연구') return '실험: 초록과 방법만 읽고 dataset, metric, baseline 3개를 적기.';
+  if (category === 'AI 에이전트') return '실험: 읽기 전용 도구 1개로 성공/실패 케이스 5개를 돌리기.';
+  if (category === 'RAG/검색') return '실험: 질문 10개로 기존 검색과 정답률/근거 품질을 비교하기.';
+  if (category === '평가/벤치마크') return '실험: 대표 프롬프트 10개를 같은 채점 기준으로 재실행하기.';
+  if (category === '추론/배포') return '실험: 같은 입력 20개로 latency, cost, 실패율을 측정하기.';
+  if (category === '개발도구/API') return '실험: hello-world 호출 후 샘플 10개 결과를 표로 남기기.';
+  return '실험: 15분 안에 API/코드/논문 링크가 있는지 확인하기.';
 }
 
 function getSummary(item: NewsItem): string {
   const raw = stripHTML(item.contentSnippet || item.title).replace(/\s+/g, ' ').trim();
-  return truncate(raw || stripHTML(item.title), 130);
+  return truncate(raw || stripHTML(item.title), 240);
 }
 
 function stripHTML(text: string): string {
@@ -184,25 +162,6 @@ function formatDateCompact(): string {
   const h = String(kst.getHours()).padStart(2, '0');
   const min = String(kst.getMinutes()).padStart(2, '0');
   return `${y}.${m}.${d} (${day}) ${h}:${min}`;
-}
-
-/**
- * 상대 시간 계산
- */
-function getRelativeTime(date: Date): string {
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMin = Math.floor(diffMs / 60000);
-
-  if (diffMin < 1) return '방금';
-  if (diffMin < 60) return `${diffMin}분 전`;
-
-  const diffHour = Math.floor(diffMin / 60);
-  if (diffHour < 24) return `${diffHour}시간 전`;
-
-  const diffDay = Math.floor(diffHour / 24);
-  if (diffDay === 1) return '어제';
-  return `${diffDay}일 전`;
 }
 
 /**
