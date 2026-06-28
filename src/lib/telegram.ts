@@ -77,9 +77,9 @@ function formatNewsItem(item: NewsItem, index: number): string {
 
   return [
     `<b>${index + 1}. [${profile.level}][${escapeHTML(profile.category)}][${escapeHTML(profile.shortTitle)}]</b>`,
-    `내용: ${escapeHTML(profile.summary)}`,
-    `인사이트: ${escapeHTML(profile.insight)}`,
-    `출처: ${source} · <a href="${link}">원문 직접</a>`,
+    `<b>내용</b>: ${escapeHTML(profile.summary)}`,
+    `<b>인사이트</b>: ${escapeHTML(profile.insight)}`,
+    `<b>출처</b>: ${source} · <a href="${link}">원문 직접</a>`,
     '',
   ].join('\n');
 }
