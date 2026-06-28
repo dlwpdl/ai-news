@@ -1,4 +1,3 @@
-import { Telegraf } from 'telegraf';
 import type { NewsItem } from '@/types/news';
 
 const MAX_MESSAGE_LENGTH = 4096;
@@ -14,14 +13,12 @@ export async function sendToTelegram(newsItems: NewsItem[]): Promise<void> {
     throw new Error('텔레그램 환경 변수가 설정되지 않았습니다.');
   }
 
-  const bot = new Telegraf(botToken);
-
   try {
     if (newsItems.length === 0) {
-      await bot.telegram.sendMessage(chatId, [
+      await sendMessage(botToken, chatId, [
         `📭 <b>AI News</b> · 새로운 뉴스가 없습니다.`,
         `<i>${formatDateCompact()}</i>`,
-      ].join('\n'), { parse_mode: 'HTML' });
+      ].join('\n'));
       console.log('✅ "새 뉴스 없음" 메시지를 전송했습니다.');
       return;
     }
@@ -39,10 +36,7 @@ export async function sendToTelegram(newsItems: NewsItem[]): Promise<void> {
         ? header + messageGroups[i]
         : messageGroups[i];
 
-      await bot.telegram.sendMessage(chatId, message, {
-        parse_mode: 'HTML',
-        link_preview_options: { is_disabled: true },
-      });
+      await sendMessage(botToken, chatId, message);
 
       if (i < messageGroups.length - 1) {
         await sleep(1000);
@@ -53,6 +47,23 @@ export async function sendToTelegram(newsItems: NewsItem[]): Promise<void> {
   } catch (error) {
     console.error('텔레그램 전송 오류:', error);
     throw error;
+  }
+}
+
+async function sendMessage(botToken: string, chatId: string, text: string): Promise<void> {
+  const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text,
+      parse_mode: 'HTML',
+      link_preview_options: { is_disabled: true },
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Telegram API error ${response.status}: ${await response.text()}`);
   }
 }
 
@@ -200,7 +211,8 @@ function escapeHTML(text: string): string {
   return text
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 function sleep(ms: number): Promise<void> {

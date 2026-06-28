@@ -306,7 +306,7 @@ async function fetchGitHubRepos(query: string): Promise<NewsItem[]> {
     link: repo.html_url,
     pubDate: new Date(repo.pushed_at),
     contentSnippet: `${repo.description || 'No description'} · ${repo.stargazers_count.toLocaleString()} stars`,
-    source: `GitHub AI Trends (${repo.stargazers_count.toLocaleString()}★)`,
+    source: `GitHub AI Repos (${repo.stargazers_count.toLocaleString()}★)`,
   }));
 }
 
