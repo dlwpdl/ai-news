@@ -27,6 +27,7 @@ const RSS_FEEDS: RSSFeed[] = [
   { url: 'https://developer.nvidia.com/blog/feed/', name: 'NVIDIA Developer' },
   { url: 'https://aws.amazon.com/blogs/machine-learning/feed/', name: 'AWS Machine Learning' },
   { url: 'https://weaviate.io/blog/rss.xml', name: 'Weaviate' },
+  { url: 'https://www.langchain.com/blog/rss.xml', name: 'LangChain Blog' },
   { url: 'https://github.blog/feed/', name: 'GitHub Blog' },
   { url: 'https://engineering.fb.com/feed/', name: 'Meta Engineering' },
   { url: 'https://lilianweng.github.io/index.xml', name: 'Lilian Weng' },
@@ -34,6 +35,10 @@ const RSS_FEEDS: RSSFeed[] = [
   { url: 'https://simonwillison.net/atom/everything/', name: 'Simon Willison' },
   { url: 'https://www.latent.space/feed', name: 'Latent Space' },
   { url: 'https://feeds.feedburner.com/geeknews-feed', name: 'GeekNews' },
+  { url: 'https://lobste.rs/t/ai.rss', name: 'Lobsters AI' },
+  { url: 'https://github.com/vllm-project/vllm/releases.atom', name: 'vLLM Releases' },
+  { url: 'https://github.com/ollama/ollama/releases.atom', name: 'Ollama Releases' },
+  { url: 'https://github.com/modelcontextprotocol/typescript-sdk/releases.atom', name: 'Model Context Protocol SDK Releases' },
 
   // === 선별 뉴스/분석 ===
   { url: 'https://www.technologyreview.com/topic/artificial-intelligence/feed', name: 'MIT Tech Review AI' },
@@ -42,7 +47,7 @@ const RSS_FEEDS: RSSFeed[] = [
 
 const FETCH_TIMEOUT = 10000; // 10초
 const MAX_NEWS_ITEMS = 12;
-const GITHUB_TREND_TOPICS = ['llm', 'ai-agent', 'rag'];
+const GITHUB_TREND_TOPICS = ['ai-agent', 'rag', 'mcp', 'llmops'];
 
 interface AnthropicLink {
   path: string;
@@ -62,6 +67,7 @@ const AI_KEYWORDS = [
   'prompt', 'tool use', 'mcp', 'vllm', 'llama', 'mlx', 'onnx', 'cuda',
   'function calling', 'structured output', 'workflow automation', 'orchestration',
   'reasoning model', 'small language model', 'slm', 'mixture of experts', 'moe',
+  'langchain', 'llamaindex', 'model context protocol', 'ollama',
   '인공지능', '생성형', '머신러닝', '딥러닝', '언어모델', '모델',
   '에이전트', '추론', '임베딩', '벡터', '파인튜닝', '멀티모달',
   '오픈소스', '개발자', '자동화'
@@ -76,6 +82,7 @@ const PRACTICAL_KEYWORDS = [
   'multimodal', 'reasoning', 'vision', 'speech', 'llmops', 'tutorial',
   'function calling', 'structured output', 'orchestration', 'automation',
   'agentic', 'tool calling', 'observability', 'guardrail',
+  'langchain', 'llamaindex', 'model context protocol', 'ollama',
   '오픈소스', '논문', '연구', '모델', '벤치마크', '평가', '에이전트',
   '개발자', '라이브러리', '프레임워크', '도구', '자동화', '튜토리얼',
   '배포', '추론', '파인튜닝', '임베딩', '멀티모달'
@@ -85,7 +92,7 @@ const LOW_SIGNAL_KEYWORDS = [
   'funding', 'raised', 'valuation', 'lawsuit', 'copyright', 'policy',
   'regulation', 'election', 'layoffs', 'stock', 'earnings', 'ceo',
   'partnership', 'acquisition', '투자', '인수', '규제', '저작권', '소송',
-  '주가', '실적'
+  'interview', 'podcast', 'opinion', 'big tech', 'labor', '주가', '실적'
 ];
 
 /**
@@ -102,7 +109,7 @@ function countMatches(text: string, keywords: string[]): number {
 
 function scoreFocusedAI(item: NewsItem): number {
   const text = `${item.title} ${item.contentSnippet || ''} ${item.source}`.toLowerCase();
-  const sourceBoost = /arxiv|deepmind|mistral|research|bair|gradient|distill|lilian|chip huyen|simon willison|latent space|developer|hugging face|weaviate|geeknews|aws|github|engineering|mit news/i.test(item.source) ? 4 : 0;
+  const sourceBoost = /arxiv|deepmind|mistral|research|bair|gradient|distill|lilian|chip huyen|simon willison|latent space|developer|hugging face|weaviate|geeknews|aws|github|engineering|mit news|langchain|vllm|ollama|model context protocol/i.test(item.source) ? 4 : 0;
   return sourceBoost + countMatches(text, PRACTICAL_KEYWORDS) * 2 - countMatches(text, LOW_SIGNAL_KEYWORDS) * 3;
 }
 
@@ -170,7 +177,7 @@ export async function fetchAllNews(): Promise<NewsItem[]> {
 
   // AI 키워드 필터링
   const aiNews = dedupedNews.filter(item => {
-    const textToCheck = `${item.title} ${item.contentSnippet || ''}`;
+    const textToCheck = `${item.title} ${item.contentSnippet || ''} ${item.source}`;
     return containsAIKeywords(textToCheck);
   });
   console.log(`🤖 AI 키워드 필터링 후: ${aiNews.length}개`);
@@ -214,7 +221,7 @@ async function fetchRSSFeed(feed: RSSFeed): Promise<NewsItem[]> {
     const items: NewsItem[] = (rssFeed.items || [])
       .filter(item => item.link && item.title && item.pubDate)
       .map(item => ({
-        title: item.title!,
+        title: formatRSSItemTitle(feed.name, item.title!),
         link: item.link!,
         pubDate: new Date(item.pubDate!),
         contentSnippet: item.contentSnippet || item.content || undefined,
@@ -225,6 +232,13 @@ async function fetchRSSFeed(feed: RSSFeed): Promise<NewsItem[]> {
   } catch (error) {
     throw new Error(`Failed to parse ${feed.name}: ${error}`);
   }
+}
+
+function formatRSSItemTitle(source: string, title: string): string {
+  if (/releases$/i.test(source) && /^(v?\d|[a-z0-9_-]+==)/i.test(title)) {
+    return `${source.replace(/\s+Releases$/i, '')} ${title}`;
+  }
+  return title;
 }
 
 async function fetchAnthropicPages(): Promise<NewsItem[]> {
@@ -282,11 +296,11 @@ async function fetchAnthropicPage(url: string, pubDate: Date): Promise<NewsItem 
 async function fetchGitHubTrendingAI(): Promise<NewsItem[]> {
   const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const results = await Promise.allSettled(
-    GITHUB_TREND_TOPICS.map(topic => fetchGitHubRepos(`topic:${topic}+stars:%3E50+pushed:%3E${since}`))
+    GITHUB_TREND_TOPICS.map(topic => fetchGitHubRepos(`topic:${topic}+stars:%3E200+pushed:%3E${since}`, topic))
   );
 
   const repos = results.flatMap(result => result.status === 'fulfilled' ? result.value : []);
-  return removeDuplicates(repos).slice(0, 8);
+  return removeDuplicates(repos).slice(0, 2);
 }
 
 interface GitHubRepo {
@@ -297,17 +311,23 @@ interface GitHubRepo {
   pushed_at: string;
 }
 
-async function fetchGitHubRepos(query: string): Promise<NewsItem[]> {
-  const url = `https://api.github.com/search/repositories?q=${query}&sort=updated&order=desc&per_page=5`;
+async function fetchGitHubRepos(query: string, topic: string): Promise<NewsItem[]> {
+  const url = `https://api.github.com/search/repositories?q=${query}&sort=updated&order=desc&per_page=3`;
   const json = await fetchJSON<{ items?: GitHubRepo[] }>(url, 'NewsBot/1.0');
 
-  return (json.items || []).map(repo => ({
-    title: repo.full_name,
-    link: repo.html_url,
-    pubDate: new Date(repo.pushed_at),
-    contentSnippet: `${repo.description || 'No description'} · ${repo.stargazers_count.toLocaleString()} stars`,
-    source: `GitHub AI Repos (${repo.stargazers_count.toLocaleString()}★)`,
-  }));
+  return (json.items || [])
+    .filter(repo => !isLowSignalRepo(repo))
+    .map(repo => ({
+      title: repo.full_name,
+      link: repo.html_url,
+      pubDate: new Date(repo.pushed_at),
+      contentSnippet: `${repo.description || 'No description'} · ${repo.stargazers_count.toLocaleString()} stars`,
+      source: `GitHub AI Repos:${topic} (${repo.stargazers_count.toLocaleString()}★)`,
+    }));
+}
+
+function isLowSignalRepo(repo: GitHubRepo): boolean {
+  return /stock|trading|crypto|finance|investment|wall.?street/i.test(`${repo.full_name} ${repo.description || ''}`);
 }
 
 async function fetchText(url: string, userAgent: string): Promise<string> {
@@ -323,14 +343,19 @@ async function fetchJSON<T>(url: string, userAgent: string): Promise<T> {
 async function fetchWithTimeout(url: string, userAgent: string): Promise<Response> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
+  const headers: Record<string, string> = {
+    'Accept': 'application/vnd.github+json, text/html',
+    'User-Agent': userAgent,
+  };
+
+  if (url.startsWith('https://api.github.com/') && process.env.GITHUB_TOKEN) {
+    headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+  }
 
   try {
     const response = await fetch(url, {
       signal: controller.signal,
-      headers: {
-        'Accept': 'application/vnd.github+json, text/html',
-        'User-Agent': userAgent,
-      },
+      headers,
     });
 
     if (!response.ok) {
