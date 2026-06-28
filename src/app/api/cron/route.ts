@@ -29,7 +29,8 @@ export async function GET(request: NextRequest) {
 
     // 2. 크로스-런 중복 제거 (Redis)
     const newUrls = await filterNewUrls(newsItems.map(item => item.link));
-    const uniqueItems = newsItems.filter(item => newUrls.has(item.link));
+    const limit = Number(request.nextUrl.searchParams.get('limit')) || undefined;
+    const uniqueItems = newsItems.filter(item => newUrls.has(item.link)).slice(0, limit);
     console.log(`🔄 크로스-런 중복 제거: ${newsItems.length}개 → ${uniqueItems.length}개`);
 
     // 3. 텔레그램으로 전송
