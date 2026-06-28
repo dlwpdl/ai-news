@@ -34,24 +34,3 @@ export function isWithinYesterdayToToday(date: Date): boolean {
 export function getKSTNow(): Date {
   return new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
 }
-
-/**
- * 날짜를 KST 형식 문자열로 변환
- * @param date 변환할 날짜
- * @returns "YYYY-MM-DD HH:mm:ss KST" 형식 문자열
- */
-export function formatKST(date: Date): string {
-  const kstDate = new Date(
-    date.toLocaleString('en-US', { timeZone: 'Asia/Seoul' })
-  );
-
-  return kstDate.toLocaleString('ko-KR', {
-    timeZone: 'Asia/Seoul',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  }) + ' KST';
-}

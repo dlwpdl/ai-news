@@ -44,6 +44,11 @@ const FETCH_TIMEOUT = 10000; // 10초
 const MAX_NEWS_ITEMS = 12;
 const GITHUB_TREND_TOPICS = ['llm', 'ai-agent', 'rag'];
 
+interface AnthropicLink {
+  path: string;
+  pubDate: Date;
+}
+
 // AI 관련 키워드
 const AI_KEYWORDS = [
   'ai', 'artificial intelligence', 'machine learning', 'ml', 'deep learning',
@@ -223,26 +228,41 @@ async function fetchRSSFeed(feed: RSSFeed): Promise<NewsItem[]> {
 }
 
 async function fetchAnthropicPages(): Promise<NewsItem[]> {
-  const paths = await Promise.all([
+  const links = await Promise.all([
     fetchAnthropicLinks('https://www.anthropic.com/news', '/news/'),
     fetchAnthropicLinks('https://www.anthropic.com/research', '/research/'),
   ]);
 
-  const urls = [...new Set(paths.flat())]
-    .filter(path => !path.startsWith('/research/team/'))
+  const uniqueLinks = [...new Map(
+    links.flat()
+      .filter(link => !link.path.startsWith('/research/team/'))
+      .map(link => [link.path, link])
+  ).values()]
     .slice(0, 10)
-    .map(path => `https://www.anthropic.com${path}`);
+    .map(link => ({
+      url: `https://www.anthropic.com${link.path}`,
+      pubDate: link.pubDate,
+    }));
 
-  const pages = await Promise.allSettled(urls.map(fetchAnthropicPage));
+  const pages = await Promise.allSettled(
+    uniqueLinks.map(link => fetchAnthropicPage(link.url, link.pubDate))
+  );
   return pages.flatMap(page => page.status === 'fulfilled' && page.value ? [page.value] : []);
 }
 
-async function fetchAnthropicLinks(url: string, prefix: string): Promise<string[]> {
+async function fetchAnthropicLinks(url: string, prefix: string): Promise<AnthropicLink[]> {
   const html = await fetchText(url, 'NewsBot/1.0');
-  return [...new Set([...html.matchAll(new RegExp(`href="(${prefix}[^"]+)"`, 'g'))].map(match => match[1]))];
+  const links: AnthropicLink[] = [];
+  const pattern = new RegExp(`href="(${prefix}[^"]+)"[\\s\\S]{0,500}?<time[^>]*>\\s*([A-Z][a-z]{2} \\d{1,2}, 20\\d{2})`, 'g');
+
+  for (const match of html.matchAll(pattern)) {
+    links.push({ path: match[1], pubDate: new Date(match[2]) });
+  }
+
+  return links;
 }
 
-async function fetchAnthropicPage(url: string): Promise<NewsItem | null> {
+async function fetchAnthropicPage(url: string, pubDate: Date): Promise<NewsItem | null> {
   const html = await fetchText(url, 'NewsBot/1.0');
   const title = decodeHTML(html.match(/<title>(.*?)<\/title>/)?.[1] || '')
     .replace(/\s*\\\s*Anthropic$/, '')
@@ -253,7 +273,7 @@ async function fetchAnthropicPage(url: string): Promise<NewsItem | null> {
   return {
     title,
     link: url,
-    pubDate: new Date(),
+    pubDate,
     contentSnippet: decodeHTML(html.match(/<meta name="description" content="([^"]*)"/)?.[1] || ''),
     source: 'Anthropic',
   };

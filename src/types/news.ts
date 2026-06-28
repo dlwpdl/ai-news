@@ -10,8 +10,3 @@ export interface RSSFeed {
   url: string;
   name: string;
 }
-
-export interface TelegramMessage {
-  text: string;
-  parse_mode: 'Markdown' | 'HTML';
-}
