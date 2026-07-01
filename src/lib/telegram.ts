@@ -8,6 +8,8 @@ interface KoreanDigest {
 }
 
 interface KoreanDigestItem {
+  level: string;
+  category: string;
   title: string;
   summary: string;
 }
@@ -119,10 +121,12 @@ function formatKoreanDigest(newsItems: NewsItem[], digest: KoreanDigest): string
     const item = newsItems[i];
     const profile = getAIProfile(item);
     const translated = digest.items[i];
+    const level = normalizeLevel(translated?.level) || profile.level;
+    const category = translated?.category || profile.category;
     const title = translated?.title || profile.shortTitle;
     const summary = translated?.summary || profile.summary;
 
-    lines.push(`<b>${i + 1}. [${profile.level}][${escapeHTML(profile.category)}] ${escapeHTML(title)}</b>`);
+    lines.push(`<b>${i + 1}. [${level}][${escapeHTML(category)}] ${escapeHTML(title)}</b>`);
     lines.push(escapeHTML(summary));
     lines.push(`${escapeHTML(item.source)} · <a href="${escapeHTML(item.link)}">원문</a>`);
     lines.push('');
@@ -185,10 +189,16 @@ function buildDigestPrompt(newsItems: NewsItem[], label: string): string {
 
   return [
     `아래 ${label} 기사 ${newsItems.length}개를 한국어 텔레그램 digest로 요약하세요.`,
-    '반드시 JSON만 반환하세요: {"overview":["..."],"items":[{"title":"...","summary":"..."}]}',
+    '반드시 JSON만 반환하세요: {"overview":["..."],"items":[{"level":"L8","category":"...","title":"...","summary":"..."}]}',
     'overview는 전체 흐름 1~2개, 각 70자 이내입니다.',
-    'items는 입력 순서와 개수를 그대로 맞추고 title은 35자 이내, summary는 85자 이내입니다.',
+    'items는 입력 순서와 개수를 그대로 맞추고 level은 L1~L10, category는 12자 이내, title은 35자 이내, summary는 85자 이내입니다.',
     '영어 제목을 그대로 두지 말고 자연스러운 한국어로 번역하세요. 고유명사와 제품명은 유지하세요.',
+    'level은 출처나 소스명으로 정하지 말고, 내용의 실험 가능성/실무성/기술 디테일로 정하세요.',
+    'L10: 논문급 세부 연구, 튜닝, 벤치마크, 취약점 분석처럼 깊게 읽고 실험할 가치가 큼',
+    'L8-L9: 에이전트, RAG, 평가, 배포, 모델 동작처럼 바로 실험/검토할 기술 신호',
+    'L6-L7: API, SDK, 오픈소스, 인프라, 릴리즈처럼 도구로 써볼 만함',
+    'L3-L5: 가이드, 튜토리얼, 워크플로, 제품 기능처럼 참고/적용 가능',
+    'L1-L2: 단순 발표, 동향, 정보성 소식',
     '중국어, 일본어, 한자는 금지입니다. 예: 跟不上 같은 표현은 "따라가지 못하는"처럼 한국어로 바꾸세요.',
     '',
     items,
@@ -212,12 +222,14 @@ function parseKoreanDigest(text: string, itemCount: number): KoreanDigest | null
   const items = Array.from({ length: itemCount }, (_, index) => {
     const item = parsed.items?.[index];
     return {
+      level: normalizeLevel(item?.level) || '',
+      category: truncate(isString(item?.category) ? item.category.trim() : '', 18),
       title: truncate(isString(item?.title) ? item.title.trim() : '', 46),
       summary: truncate(isString(item?.summary) ? item.summary.trim() : '', 120),
     };
   });
 
-  if ([...overview, ...items.flatMap(item => [item.title, item.summary])].some(containsCJKIdeograph)) {
+  if ([...overview, ...items.flatMap(item => [item.category, item.title, item.summary])].some(containsCJKIdeograph)) {
     console.error('NVIDIA 요약에 중국어/일본어/한자가 섞여 폐기합니다.');
     return null;
   }
@@ -242,8 +254,8 @@ function getAIProfile(item: NewsItem) {
 }
 
 function getAILevel(text: string): string {
-  if (/arxiv|paper|논문/.test(text)) return 'L10';
-  if (/research|benchmark|new model|foundation model|reasoning|연구|벤치마크/.test(text)) return 'L9';
+  if (/benchmark suite|dataset|architecture|training|fine-tuning|distillation|alignment|mechanistic|formal|ablation|vulnerability|attack|defense|security|survey|workload|evaluation protocol|state-of-the-art|sota|논문급|취약점/.test(text)) return 'L10';
+  if (/research|benchmark|new model|foundation model|reasoning|paper|논문|연구|벤치마크/.test(text)) return 'L9';
   if (/agent|rag|eval|fine-tuning|tool use|mcp|에이전트|평가|파인튜닝/.test(text)) return 'L8';
   if (/inference|serving|deploy|quantization|cuda|vllm|onnx|추론|배포/.test(text)) return 'L7';
   if (/api|sdk|cli|library|framework|open source|github|라이브러리|프레임워크|오픈소스/.test(text)) return 'L6';
@@ -343,6 +355,12 @@ function escapeHTML(text: string): string {
 
 function isString(value: unknown): value is string {
   return typeof value === 'string';
+}
+
+function normalizeLevel(value: unknown): string | null {
+  if (!isString(value)) return null;
+  const match = value.trim().toUpperCase().match(/^L([1-9]|10)$/);
+  return match ? `L${match[1]}` : null;
 }
 
 function containsCJKIdeograph(text: string): boolean {
