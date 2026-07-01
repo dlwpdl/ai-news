@@ -148,7 +148,7 @@ async function buildKoreanDigest(newsItems: NewsItem[], label: string): Promise<
         messages: [
           {
             role: 'system',
-            content: '뉴스를 한국어로 간결하게 번역/요약하는 편집자입니다. JSON만 출력하세요.',
+            content: '뉴스를 한국어로 간결하게 번역/요약하는 편집자입니다. 중국어, 일본어, 한자를 절대 섞지 말고 JSON만 출력하세요.',
           },
           {
             role: 'user',
@@ -189,6 +189,7 @@ function buildDigestPrompt(newsItems: NewsItem[], label: string): string {
     'overview는 전체 흐름 1~2개, 각 70자 이내입니다.',
     'items는 입력 순서와 개수를 그대로 맞추고 title은 35자 이내, summary는 85자 이내입니다.',
     '영어 제목을 그대로 두지 말고 자연스러운 한국어로 번역하세요. 고유명사와 제품명은 유지하세요.',
+    '중국어, 일본어, 한자는 금지입니다. 예: 跟不上 같은 표현은 "따라가지 못하는"처럼 한국어로 바꾸세요.',
     '',
     items,
   ].join('\n');
@@ -215,6 +216,11 @@ function parseKoreanDigest(text: string, itemCount: number): KoreanDigest | null
       summary: truncate(isString(item?.summary) ? item.summary.trim() : '', 120),
     };
   });
+
+  if ([...overview, ...items.flatMap(item => [item.title, item.summary])].some(containsCJKIdeograph)) {
+    console.error('NVIDIA 요약에 중국어/일본어/한자가 섞여 폐기합니다.');
+    return null;
+  }
 
   return { overview, items };
 }
@@ -337,6 +343,10 @@ function escapeHTML(text: string): string {
 
 function isString(value: unknown): value is string {
   return typeof value === 'string';
+}
+
+function containsCJKIdeograph(text: string): boolean {
+  return /[\u3400-\u9FFF\uF900-\uFAFF]/.test(text);
 }
 
 function sleep(ms: number): Promise<void> {
