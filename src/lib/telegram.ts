@@ -193,12 +193,17 @@ function buildDigestPrompt(newsItems: NewsItem[], label: string): string {
     'overview는 전체 흐름 1~2개, 각 70자 이내입니다.',
     'items는 입력 순서와 개수를 그대로 맞추고 level은 L1~L10, category는 12자 이내, title은 35자 이내, summary는 85자 이내입니다.',
     '영어 제목을 그대로 두지 말고 자연스러운 한국어로 번역하세요. 고유명사와 제품명은 유지하세요.',
-    'level은 출처나 소스명으로 정하지 말고, 내용의 실험 가능성/실무성/기술 디테일로 정하세요.',
-    'L10: 논문급 세부 연구, 튜닝, 벤치마크, 취약점 분석처럼 깊게 읽고 실험할 가치가 큼',
-    'L8-L9: 에이전트, RAG, 평가, 배포, 모델 동작처럼 바로 실험/검토할 기술 신호',
-    'L6-L7: API, SDK, 오픈소스, 인프라, 릴리즈처럼 도구로 써볼 만함',
-    'L3-L5: 가이드, 튜토리얼, 워크플로, 제품 기능처럼 참고/적용 가능',
-    'L1-L2: 단순 발표, 동향, 정보성 소식',
+    'level은 출처나 소스명이 아니라 "내가 실제 테스트/검증해보기 얼마나 어려운가"로 정하세요. L10일수록 어렵고 연구급입니다.',
+    'L1: 단순 정보성 발표/동향. 테스트할 내용 거의 없음.',
+    'L2: 제품/기능/릴리즈 소식. 문서 읽고 변화만 확인하면 됨.',
+    'L3: 팁, 체크리스트, 짧은 프롬프트/설정. 바로 따라 해볼 수 있음.',
+    'L4: 튜토리얼/가이드. 30분~1시간 정도로 재현 가능.',
+    'L5: 워크플로/자동화/제품 적용 사례. 간단한 코드나 계정 세팅 필요.',
+    'L6: API/SDK/CLI/라이브러리/오픈소스 도구. 샘플 프로젝트로 테스트 가능.',
+    'L7: 추론/배포/서빙/양자화/인프라. 로컬 환경, GPU, 서버 세팅이 필요할 수 있음.',
+    'L8: 에이전트/RAG/eval/tool use/MCP 등 여러 컴포넌트가 얽힌 시스템 실험.',
+    'L9: 벤치마크, 새 모델 동작, 파인튜닝, 데이터셋 평가처럼 재현 비용이 큰 연구/실험.',
+    'L10: 논문급 이론/아키텍처/대규모 학습/정교한 튜닝/복잡한 보안 분석. 개인이 바로 테스트하기 어려움.',
     '중국어, 일본어, 한자는 금지입니다. 예: 跟不上 같은 표현은 "따라가지 못하는"처럼 한국어로 바꾸세요.',
     '',
     items,
@@ -254,9 +259,9 @@ function getAIProfile(item: NewsItem) {
 }
 
 function getAILevel(text: string): string {
-  if (/benchmark suite|dataset|architecture|training|fine-tuning|distillation|alignment|mechanistic|formal|ablation|vulnerability|attack|defense|security|survey|workload|evaluation protocol|state-of-the-art|sota|논문급|취약점/.test(text)) return 'L10';
-  if (/research|benchmark|new model|foundation model|reasoning|paper|논문|연구|벤치마크/.test(text)) return 'L9';
-  if (/agent|rag|eval|fine-tuning|tool use|mcp|에이전트|평가|파인튜닝/.test(text)) return 'L8';
+  if (/architecture|large-scale training|pretraining|mechanistic|formal|theory|theoretical|state-of-the-art|sota|논문급|아키텍처|대규모 학습/.test(text)) return 'L10';
+  if (/benchmark suite|dataset|fine-tuning|distillation|alignment|ablation|evaluation protocol|new model|foundation model|paper|논문|벤치마크|파인튜닝/.test(text)) return 'L9';
+  if (/agent|rag|eval|tool use|mcp|workflow orchestration|에이전트|평가/.test(text)) return 'L8';
   if (/inference|serving|deploy|quantization|cuda|vllm|onnx|추론|배포/.test(text)) return 'L7';
   if (/api|sdk|cli|library|framework|open source|github|라이브러리|프레임워크|오픈소스/.test(text)) return 'L6';
   if (/workflow|automation|product|feature|자동화|기능/.test(text)) return 'L5';
