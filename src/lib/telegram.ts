@@ -193,17 +193,17 @@ function buildDigestPrompt(newsItems: NewsItem[], label: string): string {
     'overview는 전체 흐름 1~2개, 각 70자 이내입니다.',
     'items는 입력 순서와 개수를 그대로 맞추고 level은 L1~L10, category는 12자 이내, title은 35자 이내, summary는 85자 이내입니다.',
     '영어 제목을 그대로 두지 말고 자연스러운 한국어로 번역하세요. 고유명사와 제품명은 유지하세요.',
-    'level은 출처나 소스명이 아니라 "내가 실제 테스트/검증해보기 얼마나 어려운가"로 정하세요. L10일수록 어렵고 연구급입니다.',
-    'L1: 단순 정보성 발표/동향. 테스트할 내용 거의 없음.',
-    'L2: 제품/기능/릴리즈 소식. 문서 읽고 변화만 확인하면 됨.',
-    'L3: 팁, 체크리스트, 짧은 프롬프트/설정. 바로 따라 해볼 수 있음.',
-    'L4: 튜토리얼/가이드. 30분~1시간 정도로 재현 가능.',
-    'L5: 워크플로/자동화/제품 적용 사례. 간단한 코드나 계정 세팅 필요.',
-    'L6: API/SDK/CLI/라이브러리/오픈소스 도구. 샘플 프로젝트로 테스트 가능.',
-    'L7: 추론/배포/서빙/양자화/인프라. 로컬 환경, GPU, 서버 세팅이 필요할 수 있음.',
-    'L8: 에이전트/RAG/eval/tool use/MCP 등 여러 컴포넌트가 얽힌 시스템 실험.',
-    'L9: 벤치마크, 새 모델 동작, 파인튜닝, 데이터셋 평가처럼 재현 비용이 큰 연구/실험.',
-    'L10: 논문급 이론/아키텍처/대규모 학습/정교한 튜닝/복잡한 보안 분석. 개인이 바로 테스트하기 어려움.',
+    'level은 AI 개발/자동화 관점에서 중요도, 최신성, 내 코드/워크플로 반영 가능성을 함께 봐서 정하세요. 출처나 소스명만으로 정하지 마세요.',
+    'L1: 잡음에 가까운 업계 동향/의견. 행동할 내용 없음.',
+    'L2: 일반 제품/회사/기능 소식. 알아두면 되지만 테스트 우선순위 낮음.',
+    'L3: 프롬프트 팁, 설정값, 체크리스트. 바로 복사해서 가볍게 시도 가능.',
+    'L4: 튜토리얼, 가이드, 노트북. 따라 하며 학습/재현할 가치 있음.',
+    'L5: 업무 자동화, 앱 기능, 제품 적용 사례. 내 워크플로에 아이디어로 반영 가능.',
+    'L6: API, SDK, CLI, 라이브러리, 오픈소스 도구. 샘플 프로젝트에 붙여볼 실용 가치가 큼.',
+    'L7: 추론, 서빙, 배포, 양자화, 로컬 모델, 인프라. 개발 환경/운영에 직접 영향.',
+    'L8: 에이전트, RAG, eval, tool use, MCP 등 시스템 구성 방식. 내 AI 앱 구조에 반영할 가치가 큼.',
+    'L9: 새 모델 성능, 벤치마크, 파인튜닝, 데이터셋, 평가 방법. 모델 선택/실험 방향에 큰 영향.',
+    'L10: 최전선 모델/연구/아키텍처/새 패러다임/고영향 기술 업데이트. 바로 재현 가능하지 않아도 반드시 추적할 만함.',
     '중국어, 일본어, 한자는 금지입니다. 예: 跟不上 같은 표현은 "따라가지 못하는"처럼 한국어로 바꾸세요.',
     '',
     items,
@@ -259,7 +259,7 @@ function getAIProfile(item: NewsItem) {
 }
 
 function getAILevel(text: string): string {
-  if (/architecture|large-scale training|pretraining|mechanistic|formal|theory|theoretical|state-of-the-art|sota|논문급|아키텍처|대규모 학습/.test(text)) return 'L10';
+  if (/frontier|architecture|large-scale training|pretraining|new paradigm|state-of-the-art|sota|breakthrough|reasoning model|최전선|새 패러다임|아키텍처|대규모 학습/.test(text)) return 'L10';
   if (/benchmark suite|dataset|fine-tuning|distillation|alignment|ablation|evaluation protocol|new model|foundation model|paper|논문|벤치마크|파인튜닝/.test(text)) return 'L9';
   if (/agent|rag|eval|tool use|mcp|workflow orchestration|에이전트|평가/.test(text)) return 'L8';
   if (/inference|serving|deploy|quantization|cuda|vllm|onnx|추론|배포/.test(text)) return 'L7';
