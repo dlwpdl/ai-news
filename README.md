@@ -69,6 +69,8 @@ This is a small Node/TypeScript script, not a web app.
 ```bash
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_CHAT_ID=
+NVIDIA_API_KEY=optional_for_korean_digest
+NVIDIA_MODEL=minimaxai/minimax-m3
 SENT_URLS_FILE=.cache/ai-news-sent.json
 GITHUB_TOKEN=optional_for_local_github_api_rate_limits
 THREADS_ACCESS_TOKEN=optional_for_threads_keyword_search
@@ -76,6 +78,7 @@ THREADS_ACCESS_TOKEN=optional_for_threads_keyword_search
 
 GitHub Actions provides `GITHUB_TOKEN` automatically. For local runs, it is optional but useful when testing GitHub repo searches repeatedly.
 Threads search is disabled unless `THREADS_ACCESS_TOKEN` is set. Public Threads keyword search also requires Meta's `threads_keyword_search` permission; without approval it is limited to posts owned by the authenticated user.
+Korean digest mode is enabled when `NVIDIA_API_KEY` is set; without it, the bot falls back to the compact built-in format.
 
 ## Run Locally
 
