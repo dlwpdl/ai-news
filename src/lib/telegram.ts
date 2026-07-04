@@ -38,7 +38,7 @@ export async function sendToTelegram(newsItems: NewsItem[]): Promise<void> {
   try {
     if (newsItems.length === 0) {
       await sendMessage(botToken, chatId, [
-        `📭 <b>AI News</b> · 새로운 뉴스가 없습니다.`,
+        `📭 <b>AI 뉴스</b> · 새로운 뉴스가 없습니다.`,
         `<i>${formatDateCompact()}</i>`,
       ].join('\n'));
       console.log('✅ "새 뉴스 없음" 메시지를 전송했습니다.');
@@ -46,7 +46,7 @@ export async function sendToTelegram(newsItems: NewsItem[]): Promise<void> {
     }
 
     const header = [
-      `📰 <b>AI News</b> · ${newsItems.length}건`,
+      `🤖 <b>AI 뉴스</b> · ${newsItems.length}건`,
       `<i>${formatDateCompact()}</i>`,
       '',
     ].join('\n');
@@ -135,7 +135,7 @@ function formatKoreanDigest(newsItems: NewsItem[], digest: KoreanDigest): string
     const formattedItem = [
       `<b>${i + 1}. [${level}][${escapeHTML(category)}] ${escapeHTML(title)}</b>`,
       `<b>요약</b>: ${escapeHTML(summary)}`,
-      action ? `<b>실험</b>: ${escapeHTML(action)}` : '',
+      action ? `<b>테스트</b>: ${escapeHTML(action)}` : '',
       why ? `<b>판단</b>: ${escapeHTML(why)}` : '',
       `${escapeHTML(item.source)} · <a href="${escapeHTML(item.link)}">원문</a>`,
       '',
