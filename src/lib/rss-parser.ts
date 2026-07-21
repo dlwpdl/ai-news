@@ -46,7 +46,6 @@ const RSS_FEEDS: RSSFeed[] = [
 ];
 
 const FETCH_TIMEOUT = 10000; // 10초
-const MAX_NEWS_ITEMS = 12;
 const GITHUB_TREND_TOPICS = ['ai-agent', 'rag', 'mcp', 'llmops'];
 const THREADS_QUERIES = ['llm', 'ai agent', 'rag', 'mcp'];
 
@@ -200,10 +199,9 @@ export async function fetchAllNews(): Promise<NewsItem[]> {
     b.pubDate.getTime() - a.pubDate.getTime()
   );
 
-  const finalNews = filteredNews.slice(0, MAX_NEWS_ITEMS);
-  console.log(`✨ 최종 반환: ${finalNews.length}개`);
+  console.log(`✨ 선별 후보: ${filteredNews.length}개`);
 
-  return finalNews;
+  return filteredNews;
 }
 
 /**

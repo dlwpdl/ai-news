@@ -53,14 +53,15 @@ The collector:
 - removes duplicate URLs and near-duplicate titles,
 - requires AI keywords in the title, snippet, or trusted source signal,
 - boosts practical signals like API, SDK, CLI, benchmark, eval, agent, RAG, inference, deployment, MCP, and open source,
-- downranks low-signal business/legal/policy items unless they also contain strong technical signals.
+- downranks low-signal business/legal/policy items unless they also contain strong technical signals,
+- prefers at most three items per source or domain when alternatives exist.
 
 ## Runtime
 
 This is a small Node/TypeScript script, not a web app.
 
 - `scripts/send.ts` fetches, filters, deduplicates, formats, and sends.
-- `src/lib/rss-parser.ts` owns source collection and ranking.
+- `src/lib/rss-parser.ts` owns source collection and candidate ranking.
 - `src/lib/telegram.ts` owns Telegram formatting.
 - `src/lib/dedup-store.ts` stores recently sent URLs.
 
