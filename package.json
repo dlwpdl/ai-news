@@ -5,7 +5,7 @@
   "scripts": {
     "send": "tsx scripts/send.ts",
     "lint": "tsc --noEmit",
-    "test": "tsx --test src/lib/news-selection.test.ts"
+    "test": "tsx --test src/lib/*.test.ts"
   },
   "dependencies": {
     "rss-parser": "^3.13.0"

@@ -2,7 +2,7 @@ import type { NewsItem } from '@/types/news';
 
 const MAX_MESSAGE_LENGTH = 4096;
 
-interface KoreanDigest {
+export interface KoreanDigest {
   overview: string[];
   items: KoreanDigestItem[];
 }
@@ -95,20 +95,20 @@ async function sendMessage(botToken: string, chatId: string, text: string): Prom
 /**
  * 뉴스 항목을 HTML 형식으로 포맷팅
  */
-function formatNewsItem(item: NewsItem, index: number): string {
+export function formatNewsItem(item: NewsItem, index: number): string {
   const profile = getAIProfile(item);
   const source = escapeHTML(item.source);
   const link = escapeHTML(item.link);
 
   return [
-    `<b>${index + 1}. [${profile.level}][${escapeHTML(profile.category)}][${escapeHTML(profile.shortTitle)}]</b>`,
+    `<b>${index + 1}. [${profile.level}][${escapeHTML(profile.category)}][${escapeHTML(profile.title)}]</b>`,
     `<b>내용</b>: ${escapeHTML(profile.summary)}`,
     `<b>출처</b>: ${source} · <a href="${link}">원문 직접</a>`,
     '',
   ].join('\n');
 }
 
-function formatKoreanDigest(newsItems: NewsItem[], digest: KoreanDigest): string[] {
+export function formatKoreanDigest(newsItems: NewsItem[], digest: KoreanDigest): string[] {
   const groups: string[] = [];
   const lines: string[] = [];
 
@@ -127,7 +127,7 @@ function formatKoreanDigest(newsItems: NewsItem[], digest: KoreanDigest): string
     const translated = digest.items[i];
     const level = normalizeLevel(translated?.level) || profile.level;
     const category = translated?.category || profile.category;
-    const title = translated?.title || profile.shortTitle;
+    const title = profile.title;
     const summary = translated?.summary || profile.summary;
     const action = translated?.action || '';
     const why = translated?.why || '';
@@ -279,9 +279,9 @@ function getAIProfile(item: NewsItem) {
   const level = getAILevel(text);
   const category = getAICategory(text);
   const summary = getSummary(item);
-  const shortTitle = truncate(stripHTML(item.title), 58);
+  const title = stripHTML(item.title);
 
-  return { level, shortTitle, category, summary };
+  return { level, title, category, summary };
 }
 
 function getAILevel(text: string): string {
