@@ -1,6 +1,10 @@
 import type { NewsItem } from '@/types/news';
 
 const MAX_MESSAGE_LENGTH = 4096;
+const MAX_PLAIN_MESSAGE_LENGTH = 4000;
+const DIGEST_BATCH_SIZE = 6;
+const DIGEST_TIMEOUT_MS = 90_000;
+const SENTENCE_SEGMENTER = new Intl.Segmenter(undefined, { granularity: 'sentence' });
 
 export interface KoreanDigest {
   overview: string[];
@@ -10,7 +14,6 @@ export interface KoreanDigest {
 interface KoreanDigestItem {
   level: string;
   category: string;
-  title: string;
   summary: string;
   action: string;
   why: string;
@@ -76,20 +79,55 @@ export async function sendToTelegram(newsItems: NewsItem[]): Promise<void> {
 }
 
 async function sendMessage(botToken: string, chatId: string, text: string): Promise<void> {
-  const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text,
-      parse_mode: 'HTML',
-      link_preview_options: { is_disabled: true },
-    }),
-  });
+  for (const message of prepareTelegramMessages(text)) {
+    const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: message.text,
+        ...(message.parseMode ? { parse_mode: message.parseMode } : {}),
+        link_preview_options: { is_disabled: true },
+      }),
+    });
 
-  if (!response.ok) {
-    throw new Error(`Telegram API error ${response.status}: ${await response.text()}`);
+    if (!response.ok) {
+      throw new Error(`Telegram API error ${response.status}: ${await response.text()}`);
+    }
   }
+}
+
+export function prepareTelegramMessages(
+  text: string,
+): Array<{ text: string; parseMode?: 'HTML' }> {
+  if (text.length <= MAX_MESSAGE_LENGTH) {
+    return [{ text, parseMode: 'HTML' }];
+  }
+
+  const plainText = stripHTML(
+    text.replace(/<a href="([^"]+)">([^<]*)<\/a>/g, '$2 ($1)'),
+  );
+  const chunks: string[] = [];
+  let chunk = '';
+
+  for (const character of plainText) {
+    if (chunk.length + character.length <= MAX_PLAIN_MESSAGE_LENGTH) {
+      chunk += character;
+      continue;
+    }
+
+    const newline = chunk.lastIndexOf('\n');
+    if (newline > 0) {
+      chunks.push(chunk.slice(0, newline));
+      chunk = chunk.slice(newline + 1) + character;
+    } else {
+      chunks.push(chunk);
+      chunk = character;
+    }
+  }
+
+  if (chunk) chunks.push(chunk);
+  return chunks.map(chunkText => ({ text: chunkText }));
 }
 
 /**
@@ -102,7 +140,7 @@ export function formatNewsItem(item: NewsItem, index: number): string {
 
   return [
     `<b>${index + 1}. [${profile.level}][${escapeHTML(profile.category)}][${escapeHTML(profile.title)}]</b>`,
-    `<b>내용</b>: ${escapeHTML(profile.summary)}`,
+    ...(profile.summary ? [`<b>원문 설명</b>: ${escapeHTML(profile.summary)}`] : []),
     `<b>출처</b>: ${source} · <a href="${link}">원문 직접</a>`,
     '',
   ].join('\n');
@@ -128,13 +166,14 @@ export function formatKoreanDigest(newsItems: NewsItem[], digest: KoreanDigest):
     const level = normalizeLevel(translated?.level) || profile.level;
     const category = translated?.category || profile.category;
     const title = profile.title;
-    const summary = translated?.summary || profile.summary;
+    const translatedSummary = translated?.summary || '';
+    const summary = translatedSummary || profile.summary;
     const action = translated?.action || '';
     const why = translated?.why || '';
 
     const formattedItem = [
       `<b>${i + 1}. [${level}][${escapeHTML(category)}] ${escapeHTML(title)}</b>`,
-      `<b>요약</b>: ${escapeHTML(summary)}`,
+      summary ? `<b>${translatedSummary ? '요약' : '원문 설명'}</b>: ${escapeHTML(summary)}` : '',
       action ? `<b>테스트</b>: ${escapeHTML(action)}` : '',
       why ? `<b>판단</b>: ${escapeHTML(why)}` : '',
       `${escapeHTML(item.source)} · <a href="${escapeHTML(item.link)}">원문</a>`,
@@ -156,48 +195,103 @@ export function formatKoreanDigest(newsItems: NewsItem[], digest: KoreanDigest):
   return groups;
 }
 
-async function buildKoreanDigest(newsItems: NewsItem[], label: string): Promise<KoreanDigest | null> {
+export async function buildKoreanDigest(newsItems: NewsItem[], label: string): Promise<KoreanDigest | null> {
+  const startedAt = Date.now();
+  const batches = Array.from(
+    { length: Math.ceil(newsItems.length / DIGEST_BATCH_SIZE) },
+    (_, index) => newsItems.slice(index * DIGEST_BATCH_SIZE, (index + 1) * DIGEST_BATCH_SIZE),
+  );
   const apiKey = process.env.NVIDIA_API_KEY;
-  if (!apiKey) return null;
-
-  try {
-    const response = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: process.env.NVIDIA_MODEL || 'minimaxai/minimax-m3',
-        messages: [
-          {
-            role: 'system',
-            content: '뉴스를 한국어로 간결하게 번역/요약하는 편집자입니다. 중국어, 일본어, 한자를 절대 섞지 말고 JSON만 출력하세요.',
-          },
-          {
-            role: 'user',
-            content: buildDigestPrompt(newsItems, label),
-          },
-        ],
-        max_tokens: 2000,
-        temperature: 0.2,
-        top_p: 0.95,
-      }),
-    });
-
-    if (!response.ok) {
-      console.error(`NVIDIA 요약 오류 ${response.status}: ${await response.text()}`);
-      return null;
-    }
-
-    const data = await response.json() as NvidiaChatResponse;
-    const text = extractNvidiaText(data);
-    return text ? parseKoreanDigest(text, newsItems.length) : null;
-  } catch (error) {
-    console.error('NVIDIA 요약 오류:', error);
+  if (!apiKey) {
+    logDigestResult('fallback', 0, batches.length, startedAt);
     return null;
   }
+
+  const results = await Promise.all(
+    batches.map(batch => summarizeBatchWithRetry(batch, label, apiKey))
+  );
+  const succeeded = results.filter(Boolean).length;
+  const mode = succeeded === batches.length ? 'success' : succeeded > 0 ? 'partial' : 'fallback';
+  logDigestResult(mode, succeeded, batches.length, startedAt);
+
+  if (succeeded === 0) return null;
+
+  return {
+    overview: results.flatMap(result => result?.overview || []).slice(0, 2),
+    items: results.flatMap((result, index) =>
+      result?.items || batches[index].map(() => ({
+        level: '',
+        category: '',
+        summary: '',
+        action: '',
+        why: '',
+      }))
+    ),
+  };
+}
+
+async function summarizeBatchWithRetry(
+  newsItems: NewsItem[],
+  label: string,
+  apiKey: string,
+): Promise<KoreanDigest | null> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const response = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        signal: AbortSignal.timeout(DIGEST_TIMEOUT_MS),
+        body: JSON.stringify({
+          model: process.env.NVIDIA_MODEL || 'minimaxai/minimax-m3',
+          messages: [
+            {
+              role: 'system',
+              content: '뉴스를 한국어로 간결하게 요약하는 편집자입니다. 중국어, 일본어, 한자를 절대 섞지 말고 JSON만 출력하세요.',
+            },
+            {
+              role: 'user',
+              content: buildDigestPrompt(newsItems, label),
+            },
+          ],
+          max_tokens: 2000,
+          temperature: 0.2,
+          top_p: 0.95,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = new Error(`HTTP ${response.status}: ${response.statusText}`);
+        if (response.status !== 408 && response.status !== 429 && response.status < 500) {
+          console.error('NVIDIA 요약 배치 실패:', error);
+          return null;
+        }
+        throw error;
+      }
+
+      const data = await response.json() as NvidiaChatResponse;
+      const text = extractNvidiaText(data);
+      const digest = text ? parseKoreanDigest(text, newsItems.length) : null;
+      if (!digest) throw new Error('invalid digest response');
+      return digest;
+    } catch (error) {
+      if (attempt === 1) console.error('NVIDIA 요약 배치 실패:', error);
+    }
+  }
+
+  return null;
+}
+
+function logDigestResult(
+  mode: 'success' | 'partial' | 'fallback',
+  succeeded: number,
+  total: number,
+  startedAt: number,
+): void {
+  console.log(`📝 AI digest ${mode}: ${succeeded}/${total} batches, ${Date.now() - startedAt}ms`);
 }
 
 function buildDigestPrompt(newsItems: NewsItem[], label: string): string {
@@ -210,13 +304,12 @@ function buildDigestPrompt(newsItems: NewsItem[], label: string): string {
 
   return [
     `아래 ${label} 기사 ${newsItems.length}개를 한국어 텔레그램 digest로 요약하세요.`,
-    '반드시 JSON만 반환하세요: {"overview":["..."],"items":[{"level":"L8","category":"...","title":"...","summary":"...","action":"...","why":"..."}]}',
+    '반드시 JSON만 반환하세요: {"overview":["..."],"items":[{"level":"L8","category":"...","summary":"...","action":"...","why":"..."}]}',
     'overview는 전체 흐름 1~2개, 각 70자 이내입니다.',
-    'items는 입력 순서와 개수를 그대로 맞추세요. category는 12자 이내, title은 35자 이내입니다.',
-    'summary는 150~220자, 1~2문장으로 "무엇이 바뀌었고 왜 봐야 하는지"까지 설명하세요.',
-    'action은 90자 이내로 내가 코드/워크플로에서 해볼 만한 실험 또는 확인 작업을 쓰세요. 없으면 빈 문자열.',
-    'why는 80자 이내로 왜 그 level인지 판단 근거를 쓰세요.',
-    '영어 제목을 그대로 두지 말고 자연스러운 한국어로 번역하세요. 고유명사와 제품명은 유지하세요.',
+    'items는 입력 순서와 개수를 그대로 맞추세요. category는 12자 이내입니다.',
+    'summary는 100~160자, 1~2문장으로 "무엇이 바뀌었고 왜 봐야 하는지"까지 설명하세요.',
+    'action은 60자 이내로 내가 코드/워크플로에서 해볼 만한 실험 또는 확인 작업을 쓰세요. 없으면 빈 문자열.',
+    'why는 50자 이내로 왜 그 level인지 판단 근거를 쓰세요.',
     'level은 AI 개발/자동화 관점에서 중요도, 최신성, 내 코드/워크플로 반영 가능성을 함께 봐서 정하세요. 출처나 소스명만으로 정하지 마세요.',
     'L1: 잡음에 가까운 업계 동향/의견. 행동할 내용 없음.',
     'L2: 일반 제품/회사/기능 소식. 알아두면 되지만 테스트 우선순위 낮음.',
@@ -240,7 +333,7 @@ function extractNvidiaText(data: NvidiaChatResponse): string {
 
 function parseKoreanDigest(text: string, itemCount: number): KoreanDigest | null {
   const parsed = JSON.parse(extractJSONObject(text)) as Partial<KoreanDigest>;
-  if (!Array.isArray(parsed.items)) return null;
+  if (!Array.isArray(parsed.items) || parsed.items.length !== itemCount) return null;
 
   const overview = (Array.isArray(parsed.overview) ? parsed.overview : [])
     .filter(isString)
@@ -253,14 +346,15 @@ function parseKoreanDigest(text: string, itemCount: number): KoreanDigest | null
     return {
       level: normalizeLevel(item?.level) || '',
       category: truncate(isString(item?.category) ? item.category.trim() : '', 18),
-      title: truncate(isString(item?.title) ? item.title.trim() : '', 46),
-      summary: truncate(isString(item?.summary) ? item.summary.trim() : '', 260),
-      action: truncate(isString(item?.action) ? item.action.trim() : '', 120),
-      why: truncate(isString(item?.why) ? item.why.trim() : '', 100),
+      summary: truncate(isString(item?.summary) ? item.summary.trim() : '', 160),
+      action: truncate(isString(item?.action) ? item.action.trim() : '', 60),
+      why: truncate(isString(item?.why) ? item.why.trim() : '', 50),
     };
   });
 
-  if ([...overview, ...items.flatMap(item => [item.category, item.title, item.summary, item.action, item.why])].some(containsCJKIdeograph)) {
+  if (items.some(item => !item.summary)) return null;
+
+  if ([...overview, ...items.flatMap(item => [item.category, item.summary, item.action, item.why])].some(containsCJKIdeograph)) {
     console.error('NVIDIA 요약에 중국어/일본어/한자가 섞여 폐기합니다.');
     return null;
   }
@@ -275,7 +369,7 @@ function extractJSONObject(text: string): string {
 }
 
 function getAIProfile(item: NewsItem) {
-  const text = `${item.title} ${item.contentSnippet || ''} ${item.source}`.toLowerCase();
+  const text = `${item.title} ${item.contentSnippet || ''}`.toLowerCase();
   const level = getAILevel(text);
   const category = getAICategory(text);
   const summary = getSummary(item);
@@ -285,32 +379,50 @@ function getAIProfile(item: NewsItem) {
 }
 
 function getAILevel(text: string): string {
+  if (/tutorial|guide|how to|step-by-step|튜토리얼|가이드/.test(text)) return 'L4';
   if (/frontier|architecture|large-scale training|pretraining|new paradigm|state-of-the-art|sota|breakthrough|reasoning model|최전선|새 패러다임|아키텍처|대규모 학습/.test(text)) return 'L10';
   if (/benchmark suite|dataset|fine-tuning|distillation|alignment|ablation|evaluation protocol|new model|foundation model|paper|논문|벤치마크|파인튜닝/.test(text)) return 'L9';
   if (/agent|rag|eval|tool use|mcp|workflow orchestration|에이전트|평가/.test(text)) return 'L8';
   if (/inference|serving|deploy|quantization|cuda|vllm|onnx|추론|배포/.test(text)) return 'L7';
   if (/api|sdk|cli|library|framework|open source|github|라이브러리|프레임워크|오픈소스/.test(text)) return 'L6';
   if (/workflow|automation|product|feature|자동화|기능/.test(text)) return 'L5';
-  if (/tutorial|guide|how to|튜토리얼|가이드/.test(text)) return 'L4';
   if (/tip|prompt|체크리스트|팁/.test(text)) return 'L3';
   if (/release|launch|announces|출시|공개/.test(text)) return 'L2';
   return 'L1';
 }
 
 function getAICategory(text: string): string {
-  if (/arxiv|paper|논문/.test(text)) return '논문/연구';
+  if (/tutorial|guide|how to|step-by-step|튜토리얼|가이드/.test(text)) return '튜토리얼/가이드';
   if (/agent|tool use|mcp|에이전트/.test(text)) return 'AI 에이전트';
   if (/rag|retrieval|embedding|vector|임베딩|벡터/.test(text)) return 'RAG/검색';
   if (/eval|benchmark|evaluation|벤치마크|평가/.test(text)) return '평가/벤치마크';
   if (/inference|serving|deploy|quantization|cuda|vllm|onnx|추론|배포/.test(text)) return '추론/배포';
   if (/api|sdk|cli|library|framework|github|open source|라이브러리|프레임워크|오픈소스/.test(text)) return '개발도구/API';
   if (/multimodal|vision|speech|image|video|멀티모달|비전|음성/.test(text)) return '멀티모달';
+  if (/arxiv|paper|논문/.test(text)) return '논문/연구';
   return 'AI 기술뉴스';
 }
 
 function getSummary(item: NewsItem): string {
-  const raw = stripHTML(item.contentSnippet || item.title).replace(/\s+/g, ' ').trim();
-  return truncate(raw || stripHTML(item.title), 180);
+  const raw = stripHTML(item.contentSnippet || '')
+    .replace(/\s+/g, ' ')
+    .replace(/^arxiv:\S+\s+Announce Type:\s*\S+\s+Abstract:\s*/i, '')
+    .replace(/\s*The post\b.*?\bappeared first on\b.*$/i, '')
+    .trim();
+
+  if (!raw ||
+      /^(?:comments?(?:\s*\(\d+\))?|\d+\s+comments?)$/i.test(raw) ||
+      /^[\d,]+\s+points?\s*(?:\||·)\s*[\d,]+\s+comments?$/i.test(raw)) {
+    return '';
+  }
+
+  const segments = [...SENTENCE_SEGMENTER.segment(raw)];
+  let segmentIndex = 0;
+  let sentence = segments[segmentIndex]?.segment.trim() || '';
+  while (/^(?:mr|mrs|ms|dr|prof|sr|jr|st)\.$/i.test(sentence) && segments[segmentIndex + 1]) {
+    sentence += ` ${segments[++segmentIndex].segment.trim()}`;
+  }
+  return sentence && /[.!?。！？]["'”’)]*$/.test(sentence) ? sentence : truncate(raw, 180);
 }
 
 function stripHTML(text: string): string {
