@@ -9,21 +9,20 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - name: Probe NVIDIA API
+      - name: Probe NVIDIA API with realistic digest payload
         env:
           NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
         run: |
-          echo "key length: ${#NVIDIA_API_KEY}"
-          echo "== GET /v1/models"
-          curl -sS -o /tmp/models.json -w "http=%{http_code} time=%{time_total}s\n" --max-time 45 \
-            -H "Authorization: Bearer $NVIDIA_API_KEY" \
-            https://integrate.api.nvidia.com/v1/models || echo "curl exit $?"
-          head -c 300 /tmp/models.json; echo
-          for model in meta/llama-3.3-70b-instruct openai/gpt-oss-120b minimaxai/minimax-m3; do
-            echo "== POST chat/completions $model"
-            curl -sS -o /tmp/chat.json -w "http=%{http_code} time=%{time_total}s\n" --max-time 90 \
+          ARTICLES=""
+          for i in 1 2 3 4 5 6; do
+            ARTICLES="$ARTICLES\n$i.\nsource: Example Blog\ntitle: New agent framework release $i with tool use and MCP support\nsnippet: The team announced version $i of the framework focusing on multi-step agent workflows, retrieval augmented generation, evaluation harnesses and deployment tooling. Benchmarks show improved latency and cost. Developers can integrate via the new SDK and CLI with streaming support."
+          done
+          PROMPT="아래 AI News 기사 6개를 한국어 텔레그램 digest로 요약하세요. 반드시 JSON만 반환하세요: {\\\"overview\\\":[\\\"...\\\"],\\\"items\\\":[{\\\"level\\\":\\\"L8\\\",\\\"category\\\":\\\"...\\\",\\\"summary\\\":\\\"...\\\",\\\"action\\\":\\\"...\\\",\\\"why\\\":\\\"...\\\"}]} overview는 1~2개 70자 이내. items는 입력 순서/개수 유지, summary 100~160자, action 60자, why 50자 이내.$ARTICLES"
+          for extra in '' '"reasoning_effort":"low",' '"chat_template_kwargs":{"reasoning_effort":"low"},'; do
+            echo "== gpt-oss-120b max_tokens=4000 extra=[$extra]"
+            printf '{"model":"openai/gpt-oss-120b",%s"max_tokens":4000,"temperature":0.2,"top_p":0.95,"messages":[{"role":"system","content":"뉴스를 한국어로 요약하는 편집자입니다. JSON만 출력하세요."},{"role":"user","content":"%s"}]}' "$extra" "$PROMPT" > /tmp/req.json
+            curl -sS -o /tmp/out.json -w "http=%{http_code} time=%{time_total}s\n" --max-time 150 \
               -H "Authorization: Bearer $NVIDIA_API_KEY" -H "Content-Type: application/json" \
-              -d "{\"model\":\"$model\",\"messages\":[{\"role\":\"user\",\"content\":\"say ok\"}],\"max_tokens\":10}" \
-              https://integrate.api.nvidia.com/v1/chat/completions || echo "curl exit $?"
-            head -c 300 /tmp/chat.json; echo
+              -d @/tmp/req.json https://integrate.api.nvidia.com/v1/chat/completions || echo "curl exit $?"
+            python3 -c "import json;d=json.load(open('/tmp/out.json'));m=d.get('choices',[{}])[0].get('message',{});print('usage:',d.get('usage'));print('content head:',(m.get('content') or '')[:200]);print('reasoning len:',len(m.get('reasoning') or m.get('reasoning_content') or ''))" 2>/dev/null || head -c 300 /tmp/out.json
           done
