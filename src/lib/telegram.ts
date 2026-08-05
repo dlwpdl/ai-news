@@ -290,7 +290,7 @@ async function summarizeBatchWithRetry(
         },
         signal: AbortSignal.timeout(DIGEST_TIMEOUT_MS),
         body: JSON.stringify({
-          model: process.env.NVIDIA_MODEL || 'meta/llama-3.3-70b-instruct',
+          model: process.env.NVIDIA_MODEL || 'openai/gpt-oss-120b',
           messages: [
             {
               role: 'system',
@@ -301,7 +301,8 @@ async function summarizeBatchWithRetry(
               content: buildDigestPrompt(newsItems, label),
             },
           ],
-          max_tokens: 3000,
+          // gpt-oss는 reasoning 토큰도 max_tokens에서 차감되므로 여유 있게
+          max_tokens: 4000,
           temperature: 0.2,
           top_p: 0.95,
         }),
