@@ -3,7 +3,7 @@ import type { NewsItem } from '@/types/news';
 const MAX_MESSAGE_LENGTH = 4096;
 const MAX_PLAIN_MESSAGE_LENGTH = 4000;
 const DIGEST_BATCH_SIZE = 6;
-const DIGEST_TIMEOUT_MS = 90_000;
+const DIGEST_TIMEOUT_MS = 240_000;
 const DIGEST_BATCH_DELAY_MS = 1000;
 const SENTENCE_SEGMENTER = new Intl.Segmenter(undefined, { granularity: 'sentence' });
 
@@ -241,7 +241,14 @@ async function summarizeBatchResilient(
   label: string,
   apiKey: string,
 ): Promise<KoreanDigest | null> {
-  const digest = await summarizeBatchWithRetry(newsItems, label, apiKey);
+  let digest: KoreanDigest | null;
+  try {
+    digest = await summarizeBatchWithRetry(newsItems, label, apiKey);
+  } catch {
+    // ponytail: 타임아웃은 NVCF 큐 정체 신호 — 클라이언트가 끊어도 서버 큐에 남아
+    // 재시도/분할은 좀비 요청만 쌓으므로 이 배치는 즉시 포기
+    return null;
+  }
   if (digest || newsItems.length < 2) return digest;
 
   // 배치 통째 실패 시 절반으로 줄여 한 번씩 재시도, 실패한 절반은 빈 항목으로 정렬 유지
@@ -250,7 +257,7 @@ async function summarizeBatchResilient(
   const results: Array<KoreanDigest | null> = [];
   for (const half of halves) {
     await sleep(DIGEST_BATCH_DELAY_MS);
-    results.push(await summarizeBatchWithRetry(half, label, apiKey, 1));
+    results.push(await summarizeBatchWithRetry(half, label, apiKey, 1).catch(() => null));
   }
   if (results.every(result => !result)) return null;
 
@@ -278,6 +285,7 @@ async function summarizeBatchWithRetry(
   apiKey: string,
   attempts = 2,
 ): Promise<KoreanDigest | null> {
+  const model = process.env.NVIDIA_MODEL || 'openai/gpt-oss-120b';
   for (let attempt = 0; attempt < attempts; attempt++) {
     let retryDelayMs = DIGEST_BATCH_DELAY_MS;
     try {
@@ -290,7 +298,8 @@ async function summarizeBatchWithRetry(
         },
         signal: AbortSignal.timeout(DIGEST_TIMEOUT_MS),
         body: JSON.stringify({
-          model: process.env.NVIDIA_MODEL || 'openai/gpt-oss-120b',
+          model,
+          ...(model.startsWith('openai/gpt-oss') ? { reasoning_effort: 'low' } : {}),
           messages: [
             {
               role: 'system',
@@ -324,6 +333,10 @@ async function summarizeBatchWithRetry(
       if (!digest) throw new Error('invalid digest response');
       return digest;
     } catch (error) {
+      if (error instanceof DOMException && error.name === 'TimeoutError') {
+        console.error('NVIDIA 요약 배치 실패:', error);
+        throw error;
+      }
       if (attempt === attempts - 1) console.error('NVIDIA 요약 배치 실패:', error);
       else await sleep(retryDelayMs);
     }
