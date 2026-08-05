@@ -202,6 +202,7 @@ test('keeps 13 items aligned when the middle batch exhausts its retry', async ()
     assert.ok(digest?.items.slice(6, 12).every(digestItem => !digestItem.summary));
     assert.equal(digest?.items[12].summary, 'summary-for-item-12');
     assert.match(message, /<b>원문 설명<\/b>: Fallback sentence 6\./);
+    assert.match(message, /원문<\/a>\n\n<b>2\./);
     assert.ok(!message.includes('Extra detail should not appear.'));
     assert.ok(logs.some(log => /AI digest partial: 2\/3 batches, \d+ms/.test(log)));
   } finally {

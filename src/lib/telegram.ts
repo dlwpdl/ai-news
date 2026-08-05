@@ -151,8 +151,7 @@ export function formatNewsItem(item: NewsItem, index: number): string {
     `<b>${index + 1}. [${profile.level}][${escapeHTML(profile.category)}][${escapeHTML(profile.title)}]</b>`,
     ...(profile.summary ? [`<b>원문 설명</b>: ${escapeHTML(profile.summary)}`] : []),
     `<b>출처</b>: ${source} · <a href="${link}">원문 직접</a>`,
-    '',
-  ].join('\n');
+  ].join('\n') + '\n\n';
 }
 
 export function formatKoreanDigest(newsItems: NewsItem[], digest: KoreanDigest): string[] {
@@ -186,8 +185,7 @@ export function formatKoreanDigest(newsItems: NewsItem[], digest: KoreanDigest):
       action ? `<b>테스트</b>: ${escapeHTML(action)}` : '',
       why ? `<b>판단</b>: ${escapeHTML(why)}` : '',
       `${escapeHTML(item.source)} · <a href="${escapeHTML(item.link)}">원문</a>`,
-      '',
-    ].filter(Boolean).join('\n');
+    ].filter(Boolean).join('\n') + '\n\n';
 
     if (currentGroup && currentGroup.length + formattedItem.length > MAX_MESSAGE_LENGTH - 400) {
       groups.push(currentGroup);
