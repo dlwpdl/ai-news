@@ -81,7 +81,7 @@ test('Korean digest rendering keeps the full original title without a generated 
   assert.ok(!titleLine.includes('…'));
 });
 
-test('summarizes at most six items per sequential batch with a native 60 second timeout', async () => {
+test('summarizes at most six items per sequential batch with a native 90 second timeout', async () => {
   const originalFetch = globalThis.fetch;
   const originalApiKey = process.env.NVIDIA_API_KEY;
   const originalLog = console.log;
@@ -116,7 +116,7 @@ test('summarizes at most six items per sequential batch with a native 60 second 
     const digest = await buildKoreanDigest(Array.from({ length: 13 }, (_, index) => news(index)), 'AI News');
 
     assert.deepEqual(batchSizes.sort((a, b) => a - b), [1, 6, 6]);
-    assert.deepEqual(timeoutCalls, [60_000, 60_000, 60_000]);
+    assert.deepEqual(timeoutCalls, [90_000, 90_000, 90_000]);
     assert.equal(digest?.items.length, 13);
     assert.ok(digest?.items.every(digestItem => digestItem.summary));
     assert.ok(digest?.items.every(digestItem =>
@@ -195,7 +195,7 @@ test('keeps 13 items aligned when the middle batch exhausts its retry', async ()
 
     // middle: 통배치 2회 실패 후 절반(3개)씩 1회 재시도 — 절반들도 mock 응답과 개수 불일치로 실패
     assert.deepEqual(Object.fromEntries(calls), { first: 2, middle: 3, last: 2 });
-    assert.deepEqual(timeoutCalls, Array(7).fill(60_000));
+    assert.deepEqual(timeoutCalls, Array(7).fill(90_000));
     assert.equal(new Set(timeoutSignals).size, 7);
     assert.equal(digest?.items.length, 13);
     assert.ok(digest?.items.slice(0, 6).every(digestItem => digestItem.summary));

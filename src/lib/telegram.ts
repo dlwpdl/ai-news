@@ -3,7 +3,7 @@ import type { NewsItem } from '@/types/news';
 const MAX_MESSAGE_LENGTH = 4096;
 const MAX_PLAIN_MESSAGE_LENGTH = 4000;
 const DIGEST_BATCH_SIZE = 6;
-const DIGEST_TIMEOUT_MS = 60_000;
+const DIGEST_TIMEOUT_MS = 90_000;
 const DIGEST_BATCH_DELAY_MS = 1000;
 const SENTENCE_SEGMENTER = new Intl.Segmenter(undefined, { granularity: 'sentence' });
 
