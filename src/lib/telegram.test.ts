@@ -81,7 +81,7 @@ test('Korean digest rendering keeps the full original title without a generated 
   assert.ok(!titleLine.includes('…'));
 });
 
-test('summarizes at most six items per parallel batch with a native 90 second timeout', async () => {
+test('summarizes at most six items per sequential batch with a native 60 second timeout', async () => {
   const originalFetch = globalThis.fetch;
   const originalApiKey = process.env.NVIDIA_API_KEY;
   const originalLog = console.log;
@@ -116,7 +116,7 @@ test('summarizes at most six items per parallel batch with a native 90 second ti
     const digest = await buildKoreanDigest(Array.from({ length: 13 }, (_, index) => news(index)), 'AI News');
 
     assert.deepEqual(batchSizes.sort((a, b) => a - b), [1, 6, 6]);
-    assert.deepEqual(timeoutCalls, [90_000, 90_000, 90_000]);
+    assert.deepEqual(timeoutCalls, [60_000, 60_000, 60_000]);
     assert.equal(digest?.items.length, 13);
     assert.ok(digest?.items.every(digestItem => digestItem.summary));
     assert.ok(digest?.items.every(digestItem =>
@@ -193,9 +193,10 @@ test('keeps 13 items aligned when the middle batch exhausts its retry', async ()
     const digest = await buildKoreanDigest(items, 'AI News');
     const message = formatKoreanDigest(items, digest!).join('\n');
 
-    assert.deepEqual(Object.fromEntries(calls), { first: 2, middle: 2, last: 1 });
-    assert.deepEqual(timeoutCalls, [90_000, 90_000, 90_000, 90_000, 90_000]);
-    assert.equal(new Set(timeoutSignals).size, 5);
+    // middle: 통배치 2회 실패 후 절반(3개)씩 1회 재시도 — 절반들도 mock 응답과 개수 불일치로 실패
+    assert.deepEqual(Object.fromEntries(calls), { first: 2, middle: 3, last: 2 });
+    assert.deepEqual(timeoutCalls, Array(7).fill(60_000));
+    assert.equal(new Set(timeoutSignals).size, 7);
     assert.equal(digest?.items.length, 13);
     assert.ok(digest?.items.slice(0, 6).every(digestItem => digestItem.summary));
     assert.ok(digest?.items.slice(6, 12).every(digestItem => !digestItem.summary));
@@ -210,6 +211,44 @@ test('keeps 13 items aligned when the middle batch exhausts its retry', async ()
     if (originalApiKey === undefined) delete process.env.NVIDIA_API_KEY;
     else process.env.NVIDIA_API_KEY = originalApiKey;
     if (timeoutDescriptor) Object.defineProperty(AbortSignal, 'timeout', timeoutDescriptor);
+  }
+});
+
+test('halves a failing batch and keeps item alignment', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalApiKey = process.env.NVIDIA_API_KEY;
+  const originalLog = console.log;
+  const originalError = console.error;
+  const batchSizes: number[] = [];
+  process.env.NVIDIA_API_KEY = 'test-key';
+  console.log = () => {};
+  console.error = () => {};
+
+  globalThis.fetch = async (_input, init) => {
+    const prompt = promptFrom(init);
+    const count = itemCount(prompt);
+    batchSizes.push(count);
+    if (count === 4) return new Response('error', { status: 500 });
+    if (prompt.includes('title: item-0')) {
+      return nvidiaResponse(['첫 절반 요약 0', '첫 절반 요약 1']);
+    }
+    throw new Error('network failure');
+  };
+
+  try {
+    const digest = await buildKoreanDigest(Array.from({ length: 4 }, (_, index) => news(index)), 'AI News');
+
+    assert.deepEqual(batchSizes, [4, 4, 2, 2]);
+    assert.equal(digest?.items.length, 4);
+    assert.equal(digest?.items[0].summary, '첫 절반 요약 0');
+    assert.equal(digest?.items[1].summary, '첫 절반 요약 1');
+    assert.ok(digest?.items.slice(2).every(digestItem => !digestItem.summary));
+  } finally {
+    globalThis.fetch = originalFetch;
+    console.log = originalLog;
+    console.error = originalError;
+    if (originalApiKey === undefined) delete process.env.NVIDIA_API_KEY;
+    else process.env.NVIDIA_API_KEY = originalApiKey;
   }
 });
 

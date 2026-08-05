@@ -3,7 +3,8 @@ import type { NewsItem } from '@/types/news';
 const MAX_MESSAGE_LENGTH = 4096;
 const MAX_PLAIN_MESSAGE_LENGTH = 4000;
 const DIGEST_BATCH_SIZE = 6;
-const DIGEST_TIMEOUT_MS = 90_000;
+const DIGEST_TIMEOUT_MS = 60_000;
+const DIGEST_BATCH_DELAY_MS = 1000;
 const SENTENCE_SEGMENTER = new Intl.Segmenter(undefined, { granularity: 'sentence' });
 
 export interface KoreanDigest {
@@ -80,19 +81,27 @@ export async function sendToTelegram(newsItems: NewsItem[]): Promise<void> {
 
 async function sendMessage(botToken: string, chatId: string, text: string): Promise<void> {
   for (const message of prepareTelegramMessages(text)) {
-    const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text: message.text,
-        ...(message.parseMode ? { parse_mode: message.parseMode } : {}),
-        link_preview_options: { is_disabled: true },
-      }),
-    });
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: message.text,
+          ...(message.parseMode ? { parse_mode: message.parseMode } : {}),
+          link_preview_options: { is_disabled: true },
+        }),
+      });
 
-    if (!response.ok) {
-      throw new Error(`Telegram API error ${response.status}: ${await response.text()}`);
+      if (response.ok) break;
+
+      const body = await response.text();
+      const retryAfterSeconds = Number(/"retry_after":\s*(\d+)/.exec(body)?.[1]);
+      if (attempt === 0 && response.status === 429 && retryAfterSeconds > 0) {
+        await sleep(Math.min(retryAfterSeconds, 60) * 1000 + 500);
+        continue;
+      }
+      throw new Error(`Telegram API error ${response.status}: ${body}`);
     }
   }
 }
@@ -207,9 +216,12 @@ export async function buildKoreanDigest(newsItems: NewsItem[], label: string): P
     return null;
   }
 
-  const results = await Promise.all(
-    batches.map(batch => summarizeBatchWithRetry(batch, label, apiKey))
-  );
+  // ponytail: NVIDIA 무료 티어는 동시요청 제한이 있어 배치를 순차 + 딜레이로 호출
+  const results: Array<KoreanDigest | null> = [];
+  for (const [index, batch] of batches.entries()) {
+    if (index > 0) await sleep(DIGEST_BATCH_DELAY_MS);
+    results.push(await summarizeBatchResilient(batch, label, apiKey));
+  }
   const succeeded = results.filter(Boolean).length;
   const mode = succeeded === batches.length ? 'success' : succeeded > 0 ? 'partial' : 'fallback';
   logDigestResult(mode, succeeded, batches.length, startedAt);
@@ -219,23 +231,55 @@ export async function buildKoreanDigest(newsItems: NewsItem[], label: string): P
   return {
     overview: results.flatMap(result => result?.overview || []).slice(0, 2),
     items: results.flatMap((result, index) =>
-      result?.items || batches[index].map(() => ({
-        level: '',
-        category: '',
-        summary: '',
-        action: '',
-        why: '',
-      }))
+      result?.items || emptyDigestItems(batches[index].length)
     ),
   };
+}
+
+async function summarizeBatchResilient(
+  newsItems: NewsItem[],
+  label: string,
+  apiKey: string,
+): Promise<KoreanDigest | null> {
+  const digest = await summarizeBatchWithRetry(newsItems, label, apiKey);
+  if (digest || newsItems.length < 2) return digest;
+
+  // 배치 통째 실패 시 절반으로 줄여 한 번씩 재시도, 실패한 절반은 빈 항목으로 정렬 유지
+  const mid = Math.ceil(newsItems.length / 2);
+  const halves = [newsItems.slice(0, mid), newsItems.slice(mid)];
+  const results: Array<KoreanDigest | null> = [];
+  for (const half of halves) {
+    await sleep(DIGEST_BATCH_DELAY_MS);
+    results.push(await summarizeBatchWithRetry(half, label, apiKey, 1));
+  }
+  if (results.every(result => !result)) return null;
+
+  return {
+    overview: results.flatMap(result => result?.overview || []),
+    items: results.flatMap((result, index) =>
+      result?.items || emptyDigestItems(halves[index].length)
+    ),
+  };
+}
+
+function emptyDigestItems(count: number): KoreanDigestItem[] {
+  return Array.from({ length: count }, () => ({
+    level: '',
+    category: '',
+    summary: '',
+    action: '',
+    why: '',
+  }));
 }
 
 async function summarizeBatchWithRetry(
   newsItems: NewsItem[],
   label: string,
   apiKey: string,
+  attempts = 2,
 ): Promise<KoreanDigest | null> {
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    let retryDelayMs = DIGEST_BATCH_DELAY_MS;
     try {
       const response = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
         method: 'POST',
@@ -246,7 +290,7 @@ async function summarizeBatchWithRetry(
         },
         signal: AbortSignal.timeout(DIGEST_TIMEOUT_MS),
         body: JSON.stringify({
-          model: process.env.NVIDIA_MODEL || 'minimaxai/minimax-m3',
+          model: process.env.NVIDIA_MODEL || 'meta/llama-3.3-70b-instruct',
           messages: [
             {
               role: 'system',
@@ -257,7 +301,7 @@ async function summarizeBatchWithRetry(
               content: buildDigestPrompt(newsItems, label),
             },
           ],
-          max_tokens: 2000,
+          max_tokens: 3000,
           temperature: 0.2,
           top_p: 0.95,
         }),
@@ -269,6 +313,7 @@ async function summarizeBatchWithRetry(
           console.error('NVIDIA 요약 배치 실패:', error);
           return null;
         }
+        retryDelayMs = retryAfterMs(response.headers.get('retry-after')) ?? retryDelayMs;
         throw error;
       }
 
@@ -278,11 +323,17 @@ async function summarizeBatchWithRetry(
       if (!digest) throw new Error('invalid digest response');
       return digest;
     } catch (error) {
-      if (attempt === 1) console.error('NVIDIA 요약 배치 실패:', error);
+      if (attempt === attempts - 1) console.error('NVIDIA 요약 배치 실패:', error);
+      else await sleep(retryDelayMs);
     }
   }
 
   return null;
+}
+
+function retryAfterMs(header: string | null): number | null {
+  const seconds = Number(header);
+  return Number.isFinite(seconds) && seconds > 0 ? Math.min(seconds, 30) * 1000 : null;
 }
 
 function logDigestResult(
