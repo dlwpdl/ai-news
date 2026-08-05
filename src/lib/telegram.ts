@@ -309,7 +309,7 @@ async function summarizeBatchWithRetry(
             },
           ],
           // gpt-oss는 reasoning 토큰도 max_tokens에서 차감되므로 여유 있게
-          max_tokens: 4000,
+          max_tokens: 6000,
           temperature: 0.2,
           top_p: 0.95,
         }),
@@ -370,9 +370,9 @@ function buildDigestPrompt(newsItems: NewsItem[], label: string): string {
     '반드시 JSON만 반환하세요: {"overview":["..."],"items":[{"level":"L8","category":"...","summary":"...","action":"...","why":"..."}]}',
     'overview는 전체 흐름 1~2개, 각 70자 이내입니다.',
     'items는 입력 순서와 개수를 그대로 맞추세요. category는 12자 이내입니다.',
-    'summary는 100~160자, 1~2문장으로 "무엇이 바뀌었고 왜 봐야 하는지"까지 설명하세요.',
-    'action은 60자 이내로 내가 코드/워크플로에서 해볼 만한 실험 또는 확인 작업을 쓰세요. 없으면 빈 문자열.',
-    'why는 50자 이내로 왜 그 level인지 판단 근거를 쓰세요.',
+    'summary는 150~300자, 2~3문장으로 "무엇이 바뀌었고, 어떤 맥락이고, 왜 봐야 하는지"까지 설명하세요.',
+    'action은 100자 이내로 내가 코드/워크플로에서 해볼 만한 실험 또는 확인 작업을 구체적으로 쓰세요. 없으면 빈 문자열.',
+    'why는 80자 이내로 왜 그 level인지 판단 근거를 쓰세요.',
     'level은 AI 개발/자동화 관점에서 중요도, 최신성, 내 코드/워크플로 반영 가능성을 함께 봐서 정하세요. 출처나 소스명만으로 정하지 마세요.',
     'L1: 잡음에 가까운 업계 동향/의견. 행동할 내용 없음.',
     'L2: 일반 제품/회사/기능 소식. 알아두면 되지만 테스트 우선순위 낮음.',
@@ -409,9 +409,9 @@ function parseKoreanDigest(text: string, itemCount: number): KoreanDigest | null
     return {
       level: normalizeLevel(item?.level) || '',
       category: truncate(isString(item?.category) ? item.category.trim() : '', 18),
-      summary: truncate(isString(item?.summary) ? item.summary.trim() : '', 160),
-      action: truncate(isString(item?.action) ? item.action.trim() : '', 60),
-      why: truncate(isString(item?.why) ? item.why.trim() : '', 50),
+      summary: truncate(isString(item?.summary) ? item.summary.trim() : '', 300),
+      action: truncate(isString(item?.action) ? item.action.trim() : '', 100),
+      why: truncate(isString(item?.why) ? item.why.trim() : '', 80),
     };
   });
 

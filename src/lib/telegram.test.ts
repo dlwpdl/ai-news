@@ -120,15 +120,15 @@ test('summarizes at most six items per sequential batch with a native 240 second
     assert.equal(digest?.items.length, 13);
     assert.ok(digest?.items.every(digestItem => digestItem.summary));
     assert.ok(digest?.items.every(digestItem =>
-      digestItem.summary.length <= 160 &&
-      digestItem.action.length <= 60 &&
-      digestItem.why.length <= 50
+      digestItem.summary.length <= 300 &&
+      digestItem.action.length <= 100 &&
+      digestItem.why.length <= 80
     ));
     assert.ok(prompts.every(prompt =>
       !prompt.includes('"title":') &&
-      prompt.includes('summary는 100~160자') &&
-      prompt.includes('action은 60자 이내') &&
-      prompt.includes('why는 50자 이내')
+      prompt.includes('summary는 150~300자') &&
+      prompt.includes('action은 100자 이내') &&
+      prompt.includes('why는 80자 이내')
     ));
     assert.ok(logs.some(log => /AI digest success: 3\/3 batches, \d+ms/.test(log)));
   } finally {
