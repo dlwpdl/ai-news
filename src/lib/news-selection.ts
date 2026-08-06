@@ -1,8 +1,6 @@
 import type { NewsItem } from '@/types/news';
 
 const MAX_ITEMS_PER_SOURCE = 3;
-// 항상 받고 싶은 소스 — 후보 맨 앞으로 당겨 소스 상한(3개)까지 우선 선발
-const PRIORITY_SOURCE = /geeknews/i;
 
 export function selectNewsItems(
   items: NewsItem[],
@@ -11,15 +9,11 @@ export function selectNewsItems(
 ): NewsItem[] {
   if (limit === 0) return [];
 
-  const ordered = [
-    ...items.filter(item => PRIORITY_SOURCE.test(item.source)),
-    ...items.filter(item => !PRIORITY_SOURCE.test(item.source)),
-  ];
   const selected: NewsItem[] = [];
   const deferred: NewsItem[] = [];
   const counts = new Map<string, number>();
 
-  for (const item of ordered) {
+  for (const item of items) {
     if (!newUrls.has(item.link)) continue;
 
     const keys = [`source:${sourceKey(item.source)}`, `domain:${domainKey(item)}`];

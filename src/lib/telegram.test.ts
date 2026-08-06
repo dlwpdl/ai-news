@@ -3,6 +3,7 @@ import test from 'node:test';
 import type { NewsItem } from '@/types/news';
 import {
   buildKoreanDigest,
+  formatGeekNewsList,
   formatKoreanDigest,
   formatNewsItem,
   prepareTelegramMessages,
@@ -56,6 +57,20 @@ function nvidiaResponse(summaries: string[], action = '', why = ''): Response {
     }],
   }), { status: 200 });
 }
+
+test('GeekNews list renders compact one-line linked titles', () => {
+  const message = formatGeekNewsList([0, 1].map(index => ({
+    title: `한글 제목 ${index} <em>강조</em>`,
+    link: `https://news.hada.io/topic?id=${index}`,
+    source: 'GeekNews',
+    contentSnippet: '요약',
+    pubDate: new Date(),
+  })));
+
+  assert.match(message, /긱뉴스<\/b> · 2건/);
+  assert.match(message, /1\. <a href="https:\/\/news\.hada\.io\/topic\?id=0">한글 제목 0 강조<\/a>/);
+  assert.match(message, /2\. <a href="https:\/\/news\.hada\.io\/topic\?id=1">/);
+});
 
 test('fallback rendering keeps the full original title', () => {
   const titleLine = formatNewsItem(item, 0).split('\n')[0];

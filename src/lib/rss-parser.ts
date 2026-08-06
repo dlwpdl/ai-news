@@ -34,7 +34,6 @@ const RSS_FEEDS: RSSFeed[] = [
   { url: 'https://huyenchip.com/feed.xml', name: 'Chip Huyen' },
   { url: 'https://simonwillison.net/atom/everything/', name: 'Simon Willison' },
   { url: 'https://www.latent.space/feed', name: 'Latent Space' },
-  { url: 'https://feeds.feedburner.com/geeknews-feed', name: 'GeekNews' },
   { url: 'https://lobste.rs/t/ai.rss', name: 'Lobsters AI' },
   { url: 'https://github.com/vllm-project/vllm/releases.atom', name: 'vLLM Releases' },
   { url: 'https://github.com/ollama/ollama/releases.atom', name: 'Ollama Releases' },
@@ -44,6 +43,9 @@ const RSS_FEEDS: RSSFeed[] = [
   { url: 'https://www.technologyreview.com/topic/artificial-intelligence/feed', name: 'MIT Tech Review AI' },
   { url: 'https://arstechnica.com/tag/artificial-intelligence/feed/', name: 'Ars Technica AI' },
 ];
+
+// 긱뉴스는 AI 필터 없이 전체를 별도 리스트로 전송
+const GEEKNEWS_FEED: RSSFeed = { url: 'https://feeds.feedburner.com/geeknews-feed', name: 'GeekNews' };
 
 const FETCH_TIMEOUT = 10000; // 10초
 const GITHUB_TREND_TOPICS = ['ai-agent', 'rag', 'mcp', 'llmops'];
@@ -202,6 +204,13 @@ export async function fetchAllNews(): Promise<NewsItem[]> {
   console.log(`✨ 선별 후보: ${filteredNews.length}개`);
 
   return filteredNews;
+}
+
+export async function fetchGeekNews(): Promise<NewsItem[]> {
+  const items = await fetchRSSFeed(GEEKNEWS_FEED);
+  return items
+    .filter(item => isWithinRecentHours(item.pubDate))
+    .sort((a, b) => b.pubDate.getTime() - a.pubDate.getTime());
 }
 
 /**

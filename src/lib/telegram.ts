@@ -79,6 +79,32 @@ export async function sendToTelegram(newsItems: NewsItem[]): Promise<void> {
   }
 }
 
+/**
+ * 긱뉴스 전체를 제목+링크 컴팩트 리스트로 전송 (AI 필터/요약 없음)
+ */
+export async function sendGeekNewsList(newsItems: NewsItem[]): Promise<void> {
+  const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+
+  if (!botToken || !chatId) {
+    throw new Error('텔레그램 환경 변수가 설정되지 않았습니다.');
+  }
+  if (newsItems.length === 0) return;
+
+  await sendMessage(botToken, chatId, formatGeekNewsList(newsItems));
+  console.log(`✅ 긱뉴스 ${newsItems.length}건을 전송했습니다.`);
+}
+
+export function formatGeekNewsList(newsItems: NewsItem[]): string {
+  return [
+    `📰 <b>긱뉴스</b> · ${newsItems.length}건`,
+    `<i>${formatDateCompact()}</i>`,
+    '',
+    ...newsItems.map((item, index) =>
+      `${index + 1}. <a href="${escapeHTML(item.link)}">${escapeHTML(stripHTML(item.title).replace(/\s+/g, ' '))}</a>`),
+  ].join('\n');
+}
+
 async function sendMessage(botToken: string, chatId: string, text: string): Promise<void> {
   for (const message of prepareTelegramMessages(text)) {
     for (let attempt = 0; attempt < 2; attempt++) {

@@ -1,27 +1,36 @@
 import { filterNewUrls, markAsSent } from '../src/lib/dedup-store';
 import { selectNewsItems } from '../src/lib/news-selection';
-import { fetchAllNews } from '../src/lib/rss-parser';
-import { sendToTelegram } from '../src/lib/telegram';
+import { fetchAllNews, fetchGeekNews } from '../src/lib/rss-parser';
+import { sendGeekNewsList, sendToTelegram } from '../src/lib/telegram';
 
 const MAX_NEWS_ITEMS = 12;
+const MAX_GEEKNEWS_ITEMS = 30;
 
 async function main() {
   const limit = parseLimit(process.env.NEWS_LIMIT);
   const newsItems = await fetchAllNews();
-  const newUrls = await filterNewUrls(newsItems.map(item => item.link));
+  const geekItems = limit === 0 ? [] : await fetchGeekNews().catch(error => {
+    console.error('긱뉴스 수집 실패:', error);
+    return [];
+  });
+  const newUrls = await filterNewUrls([...newsItems, ...geekItems].map(item => item.link));
   const uniqueItems = selectNewsItems(newsItems, newUrls, limit);
+  const geekUnique = geekItems.filter(item => newUrls.has(item.link)).slice(0, MAX_GEEKNEWS_ITEMS);
 
-  if (uniqueItems.length === 0) {
+  if (uniqueItems.length === 0 && geekUnique.length === 0) {
     console.log(`Sent 0/${newsItems.length} AI news items`);
     return;
   }
 
-  console.log(`🧭 최종 출처: ${uniqueItems.map(item => item.source).join(', ')}`);
-  await sendToTelegram(uniqueItems);
+  if (uniqueItems.length > 0) {
+    console.log(`🧭 최종 출처: ${uniqueItems.map(item => item.source).join(', ')}`);
+    await sendToTelegram(uniqueItems);
+  }
+  await sendGeekNewsList(geekUnique);
 
-  await markAsSent(uniqueItems.map(item => item.link));
+  await markAsSent([...uniqueItems, ...geekUnique].map(item => item.link));
 
-  console.log(`Sent ${uniqueItems.length}/${newsItems.length} AI news items`);
+  console.log(`Sent ${uniqueItems.length}/${newsItems.length} AI news + ${geekUnique.length} GeekNews items`);
 }
 
 function parseLimit(value: string | undefined): number {
