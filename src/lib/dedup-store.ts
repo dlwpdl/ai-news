@@ -49,10 +49,19 @@ function prune(sent: SentUrls): SentUrls {
   );
 }
 
+// 쿼리를 통째로 버리면 news.hada.io/topic?id=N 같은 링크가 전부 하나로 합쳐진다 —
+// 추적 파라미터만 제거하고 나머지 쿼리는 식별자로 유지
+const TRACKING_PARAMS = /^(utm_\w+|fbclid|gclid|ref|source)$/i;
+
 function normalizeURL(url: string): string {
   try {
     const parsed = new URL(url);
-    return (parsed.origin + parsed.pathname).toLowerCase();
+    for (const key of [...parsed.searchParams.keys()]) {
+      if (TRACKING_PARAMS.test(key)) parsed.searchParams.delete(key);
+    }
+    parsed.searchParams.sort();
+    const query = parsed.searchParams.toString();
+    return (parsed.origin + parsed.pathname).toLowerCase() + (query ? `?${query}` : '');
   } catch {
     return url.toLowerCase();
   }
