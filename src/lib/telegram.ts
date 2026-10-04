@@ -1,7 +1,6 @@
 import type { NewsItem } from '@/types/news';
 
 const MAX_MESSAGE_LENGTH = 4096;
-const MAX_PLAIN_MESSAGE_LENGTH = 4000;
 const DIGEST_BATCH_SIZE = 6;
 const DIGEST_TIMEOUT_MS = 240_000;
 const DIGEST_BATCH_DELAY_MS = 1000;
@@ -91,18 +90,32 @@ export async function sendGeekNewsList(newsItems: NewsItem[]): Promise<void> {
   }
   if (newsItems.length === 0) return;
 
-  await sendMessage(botToken, chatId, formatGeekNewsList(newsItems));
+  const messages = formatGeekNewsList(newsItems);
+  for (const [index, message] of messages.entries()) {
+    await sendMessage(botToken, chatId, message);
+    if (index < messages.length - 1) await sleep(1000);
+  }
   console.log(`✅ 긱뉴스 ${newsItems.length}건을 전송했습니다.`);
 }
 
-export function formatGeekNewsList(newsItems: NewsItem[]): string {
-  return [
+export function formatGeekNewsList(newsItems: NewsItem[]): string[] {
+  const header = [
     `📰 <b>긱뉴스</b> · ${newsItems.length}건`,
     `<i>${formatDateCompact()}</i>`,
-    '',
-    ...newsItems.map((item, index) =>
-      `${index + 1}. <a href="${escapeHTML(item.link)}">${escapeHTML(stripHTML(item.title).replace(/\s+/g, ' '))}</a>`),
   ].join('\n');
+  const messages: string[] = [];
+  let current = header;
+  for (const [index, item] of newsItems.entries()) {
+    const title = truncate(stripHTML(item.title).replace(/\s+/g, ' '), 400);
+    const line = `${index + 1}. <a href="${escapeHTML(item.link)}">${escapeHTML(title)}</a>`;
+    if (current.length + line.length + 1 > MAX_MESSAGE_LENGTH - 200) {
+      messages.push(current);
+      current = '📰 <b>긱뉴스 계속</b>';
+    }
+    current += `\n${line}`;
+  }
+  messages.push(current);
+  return messages;
 }
 
 async function sendMessage(botToken: string, chatId: string, text: string): Promise<void> {
@@ -135,34 +148,8 @@ async function sendMessage(botToken: string, chatId: string, text: string): Prom
 export function prepareTelegramMessages(
   text: string,
 ): Array<{ text: string; parseMode?: 'HTML' }> {
-  if (text.length <= MAX_MESSAGE_LENGTH) {
-    return [{ text, parseMode: 'HTML' }];
-  }
-
-  const plainText = stripHTML(
-    text.replace(/<a href="([^"]+)">([^<]*)<\/a>/g, '$2 ($1)'),
-  );
-  const chunks: string[] = [];
-  let chunk = '';
-
-  for (const character of plainText) {
-    if (chunk.length + character.length <= MAX_PLAIN_MESSAGE_LENGTH) {
-      chunk += character;
-      continue;
-    }
-
-    const newline = chunk.lastIndexOf('\n');
-    if (newline > 0) {
-      chunks.push(chunk.slice(0, newline));
-      chunk = chunk.slice(newline + 1) + character;
-    } else {
-      chunks.push(chunk);
-      chunk = character;
-    }
-  }
-
-  if (chunk) chunks.push(chunk);
-  return chunks.map(chunkText => ({ text: chunkText }));
+  if (text.length > MAX_MESSAGE_LENGTH) throw new Error('Telegram message too long');
+  return [{ text, parseMode: 'HTML' }];
 }
 
 /**
@@ -174,8 +161,8 @@ export function formatNewsItem(item: NewsItem, index: number): string {
   const link = escapeHTML(item.link);
 
   return [
-    `<b>${index + 1}. [${profile.level}][${escapeHTML(profile.category)}][${escapeHTML(profile.title)}]</b>`,
-    ...(profile.summary ? [`<b>원문 설명</b>: ${escapeHTML(profile.summary)}`] : []),
+    `<b>${index + 1}. [${profile.level}][${escapeHTML(profile.category)}][${escapeHTML(truncate(profile.title, 400))}]</b>`,
+    ...(profile.summary ? [`<b>원문 설명</b>: ${escapeHTML(truncate(profile.summary, 300))}`] : []),
     `<b>출처</b>: ${source} · <a href="${link}">원문 직접</a>`,
   ].join('\n') + '\n\n';
 }
@@ -199,9 +186,9 @@ export function formatKoreanDigest(newsItems: NewsItem[], digest: KoreanDigest):
     const translated = digest.items[i];
     const level = normalizeLevel(translated?.level) || profile.level;
     const category = translated?.category || profile.category;
-    const title = profile.title;
+    const title = truncate(profile.title, 400);
     const translatedSummary = translated?.summary || '';
-    const summary = translatedSummary || profile.summary;
+    const summary = truncate(translatedSummary || profile.summary, 300);
     const action = translated?.action || '';
     const why = translated?.why || '';
 
@@ -309,7 +296,7 @@ async function summarizeBatchWithRetry(
   apiKey: string,
   attempts = 2,
 ): Promise<KoreanDigest | null> {
-  const model = process.env.NVIDIA_MODEL || 'openai/gpt-oss-120b';
+  const model = process.env.NVIDIA_MODEL || 'nvidia/nemotron-3.5-lightning-30b-a3b';
   for (let attempt = 0; attempt < attempts; attempt++) {
     let retryDelayMs = DIGEST_BATCH_DELAY_MS;
     try {
@@ -334,7 +321,6 @@ async function summarizeBatchWithRetry(
               content: buildDigestPrompt(newsItems, label),
             },
           ],
-          // gpt-oss는 reasoning 토큰도 max_tokens에서 차감되므로 여유 있게
           max_tokens: 6000,
           temperature: 0.2,
           top_p: 0.95,

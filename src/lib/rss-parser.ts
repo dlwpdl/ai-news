@@ -208,9 +208,7 @@ export async function fetchAllNews(): Promise<NewsItem[]> {
 
 export async function fetchGeekNews(): Promise<NewsItem[]> {
   const items = await fetchRSSFeed(GEEKNEWS_FEED);
-  return items
-    .filter(item => isWithinRecentHours(item.pubDate))
-    .sort((a, b) => b.pubDate.getTime() - a.pubDate.getTime());
+  return items.sort((a, b) => b.pubDate.getTime() - a.pubDate.getTime());
 }
 
 /**

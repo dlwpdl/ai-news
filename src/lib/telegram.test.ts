@@ -59,7 +59,7 @@ function nvidiaResponse(summaries: string[], action = '', why = ''): Response {
 }
 
 test('GeekNews list renders compact one-line linked titles', () => {
-  const message = formatGeekNewsList([0, 1].map(index => ({
+  const [message] = formatGeekNewsList([0, 1].map(index => ({
     title: `한글 제목 ${index} <em>강조</em>`,
     link: `https://news.hada.io/topic?id=${index}`,
     source: 'GeekNews',
@@ -99,6 +99,7 @@ test('Korean digest rendering keeps the full original title without a generated 
 test('summarizes at most six items per sequential batch with a native 240 second timeout', async () => {
   const originalFetch = globalThis.fetch;
   const originalApiKey = process.env.NVIDIA_API_KEY;
+  const originalModel = process.env.NVIDIA_MODEL;
   const originalLog = console.log;
   const timeoutDescriptor = Object.getOwnPropertyDescriptor(AbortSignal, 'timeout');
   const batchSizes: number[] = [];
@@ -106,6 +107,7 @@ test('summarizes at most six items per sequential batch with a native 240 second
   const prompts: string[] = [];
   const logs: string[] = [];
   process.env.NVIDIA_API_KEY = 'test-key';
+  delete process.env.NVIDIA_MODEL;
   console.log = (...values: unknown[]) => logs.push(values.join(' '));
 
   Object.defineProperty(AbortSignal, 'timeout', {
@@ -116,6 +118,7 @@ test('summarizes at most six items per sequential batch with a native 240 second
     },
   });
   globalThis.fetch = async (_input, init) => {
+    assert.equal(JSON.parse(String(init?.body)).model, 'nvidia/nemotron-3.5-lightning-30b-a3b');
     const prompt = promptFrom(init);
     const count = itemCount(prompt);
     prompts.push(prompt);
@@ -151,6 +154,8 @@ test('summarizes at most six items per sequential batch with a native 240 second
     console.log = originalLog;
     if (originalApiKey === undefined) delete process.env.NVIDIA_API_KEY;
     else process.env.NVIDIA_API_KEY = originalApiKey;
+    if (originalModel === undefined) delete process.env.NVIDIA_MODEL;
+    else process.env.NVIDIA_MODEL = originalModel;
     if (timeoutDescriptor) Object.defineProperty(AbortSignal, 'timeout', timeoutDescriptor);
   }
 });
@@ -433,15 +438,25 @@ test('topical category wins over the paper medium', () => {
   assert.match(rendered, /\[AI 에이전트\]/);
 });
 
-test('oversized Telegram text is split without truncating the title or link', () => {
-  const title = 'T'.repeat(4_100);
-  const messages = prepareTelegramMessages(
-    `<b>${title}</b>\n<a href="https://example.com/full">원문</a>`,
-  );
+test('GeekNews sends every article intact across multiple messages', () => {
+  const items = Array.from({ length: 50 }, (_, index) => ({ ...news(index), title: `제목 ${index} ${'글'.repeat(180)}` }));
+  const messages = formatGeekNewsList(items);
 
   assert.ok(messages.length > 1);
-  assert.ok(messages.every(message => message.text.length <= 4_096));
-  assert.equal(messages.map(message => message.text).join('').match(/T/g)?.length, title.length);
-  assert.ok(messages.at(-1)?.text.includes('https://example.com/full'));
-  assert.ok(messages.every(message => message.parseMode === undefined));
+  assert.ok(messages.every(message => message.length <= 4_096));
+  for (const [index, item] of items.entries()) {
+    assert.equal(messages.filter(message => message.includes(`href="${item.link}"`)).length, 1);
+    assert.ok(messages.some(message => message.includes(item.title) && message.includes(item.link)));
+    assert.ok(messages.some(message => message.includes(`${index + 1}. <a href=`)));
+  }
+});
+
+test('oversized fallback article stays in one message with an intact link', () => {
+  const groups = formatKoreanDigest([{ ...item, title: 'T'.repeat(4_100) }], {
+    overview: [], items: [{ level: 'L4', category: '연구', summary: '', action: '', why: '' }],
+  });
+  assert.equal(groups.length, 1);
+  assert.ok(groups[0].length <= 4_096);
+  assert.match(groups[0], /https:\/\/arxiv\.org\/abs\/example/);
+  assert.throws(() => prepareTelegramMessages('X'.repeat(4_097)), /too long/);
 });
