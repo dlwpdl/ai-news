@@ -311,6 +311,10 @@ async function summarizeBatchWithRetry(
         body: JSON.stringify({
           model,
           ...(model.startsWith('openai/gpt-oss') ? { reasoning_effort: 'low' } : {}),
+          ...(model === 'nvidia/nemotron-3.5-lightning-30b-a3b' ? {
+            chat_template_kwargs: { enable_thinking: false },
+            response_format: { type: 'json_object' },
+          } : {}),
           messages: [
             {
               role: 'system',

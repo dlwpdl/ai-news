@@ -118,7 +118,10 @@ test('summarizes at most six items per sequential batch with a native 240 second
     },
   });
   globalThis.fetch = async (_input, init) => {
-    assert.equal(JSON.parse(String(init?.body)).model, 'nvidia/nemotron-3.5-lightning-30b-a3b');
+    const request = JSON.parse(String(init?.body));
+    assert.equal(request.model, 'nvidia/nemotron-3.5-lightning-30b-a3b');
+    assert.deepEqual(request.chat_template_kwargs, { enable_thinking: false });
+    assert.deepEqual(request.response_format, { type: 'json_object' });
     const prompt = promptFrom(init);
     const count = itemCount(prompt);
     prompts.push(prompt);
