@@ -1,35 +1,21 @@
 # AI News
 
-Practical AI news Telegram sender. It watches research, official lab posts, developer tooling, open-source activity, and technical communities, then sends the most actionable items once per day.
+Practical AI news Telegram sender. It watches research, official lab posts, developer tooling, open-source activity, and technical communities, then sends the most actionable items twice per day.
 
 The goal is not to summarize every AI headline. The bot favors items that can lead to a paper read, API test, repo evaluation, benchmark check, local experiment, or automation idea.
 
 ## What It Sends
 
-Each item is formatted for quick triage:
+A compact numbered list of linked original titles, matching the GeekNews format:
 
 ```text
-1. [L8][AI 에이전트][Short title]
-내용: What changed and enough context to understand it
-출처: Source · 원문 직접
+🤖 AI 뉴스 · 2건
+2026.10.06 (화) 08:00
+1. Original article title (links to the article)
+2. Another original title (links to the article)
 ```
 
-The Telegram labels are intentionally Korean because the message is consumed in Korean, while this README documents the project in English.
-
-## Level System
-
-| Level | Meaning |
-| --- | --- |
-| L1 | General AI news with low immediate actionability |
-| L2 | Product, model, or feature release |
-| L3 | Prompt, checklist, or usage tip |
-| L4 | Tutorial, guide, or implementation note |
-| L5 | Workflow automation or productized AI use case |
-| L6 | API, SDK, CLI, library, framework, or open-source repo |
-| L7 | Inference, serving, deployment, quantization, or ops |
-| L8 | Agents, RAG, evals, tool use, MCP, or applied LLM systems |
-| L9 | Model, benchmark, dataset, or serious research write-up |
-| L10 | Paper, arXiv item, or frontier research |
+GeekNews continues as its own unfiltered title-and-link list. Article bodies, summaries, level/category labels, and model calls are omitted. Link previews are disabled. Long lists split between articles while keeping each title and link together.
 
 ## Source Strategy
 
@@ -70,8 +56,6 @@ This is a small Node/TypeScript script, not a web app.
 ```bash
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_CHAT_ID=
-NVIDIA_API_KEY=optional_for_korean_digest
-NVIDIA_MODEL=minimaxai/minimax-m3
 SENT_URLS_FILE=.cache/ai-news-sent.json
 GITHUB_TOKEN=optional_for_local_github_api_rate_limits
 THREADS_ACCESS_TOKEN=optional_for_threads_keyword_search
@@ -79,7 +63,6 @@ THREADS_ACCESS_TOKEN=optional_for_threads_keyword_search
 
 GitHub Actions provides `GITHUB_TOKEN` automatically. For local runs, it is optional but useful when testing GitHub repo searches repeatedly.
 Threads search is disabled unless `THREADS_ACCESS_TOKEN` is set. Public Threads keyword search also requires Meta's `threads_keyword_search` permission; without approval it is limited to posts owned by the authenticated user.
-Korean digest mode is enabled when `NVIDIA_API_KEY` is set; without it, the bot falls back to the compact built-in format.
 
 ## Run Locally
 
